@@ -54,16 +54,39 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
   const handleCustomAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+    const email = loginEmail.trim().toLowerCase();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailPattern.test(email)) {
+      setAuthError('Enter a valid email address, for example name@example.com.');
+      return;
+    }
+    if (isRegisterMode && !loginName.trim()) {
+      setAuthError('Full name is required.');
+      return;
+    }
+    if (isRegisterMode && !/^\+?[0-9\s-]{10,15}$/.test(loginPhone.trim())) {
+      setAuthError('Enter a valid WhatsApp number.');
+      return;
+    }
+    if (loginPassword.length < 8) {
+      setAuthError('Password must be at least 8 characters.');
+      return;
+    }
     const result = isRegisterMode
       ? await supabase.auth.signUp({
-        email: loginEmail,
+        email,
         password: loginPassword,
         options: { data: { full_name: loginName, phone: loginPhone } },
       })
-      : await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+      : await supabase.auth.signInWithPassword({ email, password: loginPassword });
 
     if (result.error) {
       setAuthError(result.error.message);
+      return;
+    }
+
+    if (isRegisterMode && !result.data.session) {
+      setAuthError('Account created. Check your email and confirm it before signing in.');
       return;
     }
 
@@ -71,7 +94,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
       onLogin({
         id: result.data.user.id,
         name: loginName || result.data.user.email?.split('@')[0] || 'Valued Client',
-        email: result.data.user.email || loginEmail,
+        email: result.data.user.email || email,
         phone: loginPhone,
         role: 'customer',
       });
@@ -159,10 +182,11 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-[#6B655E] mb-1 font-bold">WhatsApp Number</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-[#6B655E] mb-1 font-bold">WhatsApp Number *</label>
                 <input
                   type="tel"
-                  value={loginPhone}
+                    required={isRegisterMode}
+                    value={loginPhone}
                   onChange={(e) => setLoginPhone(e.target.value)}
                   className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2.5 text-xs text-[#2A2A2A]"
                 />
@@ -174,7 +198,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                   <input
                     type={isPasswordVisible ? 'text' : 'password'}
                     required
-                    minLength={6}
+                    minLength={8}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2.5 pr-10 text-xs text-[#2A2A2A]"
@@ -223,7 +247,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                 return (
                   <button
                     key={t.id}
-                    onClick={() => setActiveTab(t.id as any)}
+                    onClick={() => setActiveTab(t.id as 'orders' | 'wishlist')}
                     className={`py-3.5 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                       activeTab === t.id
                         ? 'border-[#2A2A2A] text-[#2A2A2A]'
@@ -285,7 +309,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                               <img src={it.product.images[0]} alt="" className="w-12 h-14 object-cover border border-[#DCD7D0]" />
                               <div className="flex-1">
                                 <h3 className="font-serif italic text-sm text-[#2A2A2A]">{it.product.name}</h3>
-                                <p className="text-[#6B655E]">Size: {it.selectedSize} (Qty: {it.quantity})</p>
+                                <p className="text-[#6B655E]">{it.selectedSize ? `Size: ${it.selectedSize} · ` : ''}Qty: {it.quantity}</p>
                               </div>
                               <span className="font-bold text-[#2A2A2A]">{formatCurrency(it.itemTotal, currency)}</span>
                             </div>

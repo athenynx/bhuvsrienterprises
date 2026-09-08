@@ -89,7 +89,7 @@ export const shipmentService = {
         .from('shipments')
         .select('*')
         .eq('id', shipmentId)
-        .single();
+        .maybeSingle();
 
       if (shipmentError || !shipment) return null;
 
@@ -114,7 +114,7 @@ export const shipmentService = {
         .from('shipments')
         .select('*')
         .eq('tracking_number', trackingNumber)
-        .single();
+        .maybeSingle();
 
       if (shipmentError || !shipment) return null;
 
@@ -139,7 +139,7 @@ export const shipmentService = {
         .from('shipments')
         .select('*')
         .eq('order_id', orderId)
-        .single();
+        .maybeSingle();
 
       if (shipmentError || !shipment) return null;
 
@@ -153,6 +153,17 @@ export const shipmentService = {
     } catch (error) {
       return null;
     }
+  },
+
+  async getShipmentByOrderNumber(orderNumber: string): Promise<Shipment | null> {
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('order_number', orderNumber)
+      .maybeSingle();
+
+    if (error || !order) return null;
+    return this.getShipmentByOrderId(order.id);
   },
 
   /**
@@ -258,6 +269,27 @@ export const shipmentService = {
     } catch (error) {
       return false;
     }
+  },
+
+  async updateShipmentDetails(
+    shipmentId: string,
+    details: {
+      originLocation?: string;
+      currentLocation?: string;
+      destinationLocation?: string;
+      estimatedDeliveryDate?: string;
+    }
+  ): Promise<boolean> {
+    const updateData: Record<string, string> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (details.originLocation) updateData.origin_location = details.originLocation;
+    if (details.currentLocation) updateData.current_location = details.currentLocation;
+    if (details.destinationLocation) updateData.destination_location = details.destinationLocation;
+    if (details.estimatedDeliveryDate) updateData.estimated_delivery_date = details.estimatedDeliveryDate;
+
+    const { error } = await supabase.from('shipments').update(updateData).eq('id', shipmentId);
+    return !error;
   },
 
   /**

@@ -26,7 +26,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const colorVariants = product.colorVariants && product.colorVariants.length > 0
     ? product.colorVariants
-    : [{ id: product.id, name: product.color, hex: product.colorHex, images: product.images }];
+    : [{ id: product.id, name: product.color, images: product.images }];
   const [activeVariantId, setActiveVariantId] = useState(colorVariants[0].id);
   const activeVariant = colorVariants.find(v => v.id === activeVariantId) ?? colorVariants[0];
   const displayImages = activeVariant.images.length > 0 ? activeVariant.images : product.images;
@@ -157,7 +157,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Subcategory & Fabric Tag */}
           <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-[#6B655E]">
             <span>{product.subcategory}</span>
-            <span className="truncate max-w-[110px] font-light">{product.fabric.split(' ')[0]}</span>
+            <span className="truncate max-w-27.5 font-light">{product.fabric.split(' ')[0]}</span>
           </div>
 
           {/* Product Name */}
@@ -173,58 +173,93 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {product.tagline}
           </p>
 
-          {/* Colour Variant Thumbnails — Myntra-style "also available in" strip */}
-          {colorVariants.length > 1 && (
-            <div className="mt-2">
-              <div className="flex items-center gap-1.5">
-                {colorVariants.slice(0, 4).map((variant) => {
-                  const thumb = variant.images[0] || product.images[0];
-                  return (
-                    <button
-                      key={variant.id}
-                      type="button"
-                      onClick={(e) => handleSwatchSelect(e, variant.id)}
-                      title={variant.name}
-                      className={`w-7 h-7 shrink-0 border overflow-hidden transition-all cursor-pointer ${
-                        activeVariantId === variant.id ? 'ring-2 ring-offset-1 ring-[#2A2A2A] border-[#2A2A2A]' : 'border-[#DCD7D0]'
-                      }`}
-                    >
-                      {thumb ? (
-                        <img src={thumb} alt={variant.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="block w-full h-full" style={{ backgroundColor: variant.hex }} />
-                      )}
-                    </button>
-                  );
-                })}
-                {colorVariants.length > 4 && (
-                  <span className="text-[9px] text-[#6B655E] font-bold">+{colorVariants.length - 4}</span>
-                )}
-              </div>
-              <p className="text-[9px] uppercase tracking-wider text-[#6B655E] mt-1">
-                {colorVariants.length} Colours Available
-              </p>
-            </div>
-          )}
-        </div>
+          <p className="text-[9px] uppercase tracking-wider text-[#8C857D] font-mono mt-1">
+            Product ID: {product.sku}
+          </p>
 
-        {/* Pricing and Action Footer */}
-        <div className="pt-3 border-t border-[#DCD7D0] flex items-center justify-between gap-2">
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-[#2A2A2A]">
-                {formatCurrency(product.price, currency)}
-              </span>
-              {product.originalPrice && (
-                <span className="text-[11px] text-[#6B655E] line-through">
-                  {formatCurrency(product.originalPrice, currency)}
-                </span>
-              )}
-            </div>
-            <p className="text-[10px] text-[#A68A64] font-medium uppercase tracking-wider">
-              Ready to Dispatch
-            </p>
-          </div>
+          {/* Colour Variant Thumbnails — Myntra-style "also available in" strip */}
+{Array.isArray(colorVariants) && colorVariants.length > 1 && (
+  <div className="mt-2">
+    <div className="flex items-center gap-1.5">
+      {colorVariants.slice(0, 4).map((variant) => {
+        const thumb =
+          Array.isArray(variant.images) && variant.images.length > 0
+            ? variant.images[0]
+            : Array.isArray(product?.images) && product.images.length > 0
+              ? product.images[0]
+              : null;
+
+        const isActive = activeVariantId === variant.id;
+
+        return (
+          <button
+            key={variant.id}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleSwatchSelect(e, variant.id);
+            }}
+            title={variant.name || "Colour variant"}
+            aria-label={`Select ${variant.name || "colour variant"}`}
+            aria-pressed={isActive}
+            className={`w-7 h-7 shrink-0 overflow-hidden border cursor-pointer transition-all ${
+              isActive
+                ? "ring-2 ring-offset-1 ring-[#2A2A2A] border-[#2A2A2A]"
+                : "border-[#DCD7D0]"
+            }`}
+          >
+            {thumb ? (
+              <img
+                src={thumb}
+                alt={variant.name || "Colour variant"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span
+                className="block w-full h-full"
+                style={{
+                  backgroundColor: "#DCD7D0",
+                }}
+              />
+            )}
+          </button>
+        );
+      })}
+
+      {colorVariants.length > 4 && (
+        <span className="text-[9px] text-[#6B655E] font-bold">
+          +{colorVariants.length - 4}
+        </span>
+      )}
+    </div>
+
+    <p className="text-[9px] uppercase tracking-wider text-[#6B655E] mt-1">
+      {colorVariants.length} Colours Available
+    </p>
+  </div>
+)}
+
+{/* Pricing and Action Footer */}
+<div className="pt-3 border-t border-[#DCD7D0] flex items-center justify-between gap-2">
+  <div>
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-sm font-bold text-[#2A2A2A]">
+        {formatCurrency(product?.price ?? 0, currency)}
+      </span>
+
+      {product?.originalPrice != null && (
+        <span className="text-[11px] text-[#6B655E] line-through">
+          {formatCurrency(product.originalPrice, currency)}
+        </span>
+      )}
+    </div>
+
+    <p className="text-[10px] text-[#A68A64] font-medium uppercase tracking-wider">
+      Ready to Dispatch
+    </p>
+  </div>
+</div>
 
           {/* Add to Bag Button */}
           <button

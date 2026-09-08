@@ -6,6 +6,7 @@ import { Package, Truck, MapPin, Calendar, CheckCircle2, Clock, AlertCircle, Ext
 interface ShipmentTrackingProps {
   shipmentId?: string;
   orderId?: string;
+  orderNumber?: string;
   trackingNumber?: string;
 }
 
@@ -44,6 +45,7 @@ const statusLabelMap: Record<string, string> = {
 export const ShipmentTracking: React.FC<ShipmentTrackingProps> = ({
   shipmentId,
   orderId,
+  orderNumber,
   trackingNumber,
 }) => {
   const [shipment, setShipment] = useState<Shipment | null>(null);
@@ -54,6 +56,7 @@ export const ShipmentTracking: React.FC<ShipmentTrackingProps> = ({
     const fetchShipment = async () => {
       setIsLoading(true);
       setError(null);
+      setShipment(null);
       let result: Shipment | null = null;
 
       try {
@@ -61,15 +64,13 @@ export const ShipmentTracking: React.FC<ShipmentTrackingProps> = ({
           result = await shipmentService.getShipmentById(shipmentId);
         } else if (orderId) {
           result = await shipmentService.getShipmentByOrderId(orderId);
-        } else if (trackingNumber) {
-          result = await shipmentService.getShipmentByTrackingNumber(trackingNumber);
+        } else if (orderNumber || trackingNumber) {
+          if (orderNumber) result = await shipmentService.getShipmentByOrderNumber(orderNumber);
+          if (!result && trackingNumber) result = await shipmentService.getShipmentByTrackingNumber(trackingNumber);
         }
 
-        if (!result) {
-          setError('Shipment information not found');
-        } else {
-          setShipment(result);
-        }
+        if (!result) setError('Shipment information not found');
+        else setShipment(result);
       } catch (err) {
         setError('Failed to load shipment information');
       } finally {
@@ -77,10 +78,8 @@ export const ShipmentTracking: React.FC<ShipmentTrackingProps> = ({
       }
     };
 
-    if (shipmentId || orderId || trackingNumber) {
-      fetchShipment();
-    }
-  }, [shipmentId, orderId, trackingNumber]);
+    if (shipmentId || orderId || orderNumber || trackingNumber) fetchShipment();
+  }, [shipmentId, orderId, orderNumber, trackingNumber]);
 
   if (isLoading) {
     return (
@@ -178,12 +177,12 @@ export const ShipmentTracking: React.FC<ShipmentTrackingProps> = ({
                 key={event.id}
                 className={`flex gap-4 p-4 ${index !== shipment.trackingEvents!.length - 1 ? 'border-b border-[#DCD7D0]' : ''}`}
               >
-                <div className="flex-shrink-0 mt-0.5">
+                <div className="shrink-0 mt-0.5">
                   <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#EAE5DF] border border-[#DCD7D0] text-[#2A2A2A]">
                     {statusIconMap[event.status] || <Package size={14} />}
                   </div>
                 </div>
-                <div className="flex-grow min-w-0">
+                <div className="grow min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-[#2A2A2A] font-semibold text-xs">{statusLabelMap[event.status] || event.status}</p>
@@ -197,7 +196,7 @@ export const ShipmentTracking: React.FC<ShipmentTrackingProps> = ({
                         <p className="text-[#6B655E] text-xs mt-1">{event.description}</p>
                       )}
                     </div>
-                    <div className="flex-shrink-0 text-right">
+                    <div className="shrink-0 text-right">
                       <p className="text-[#6B655E] text-[10px] whitespace-nowrap">
                         {new Date(event.timestamp).toLocaleDateString('en-IN', {
                           month: 'short',

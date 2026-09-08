@@ -14,6 +14,7 @@ ALTER TABLE public.products
   ADD COLUMN IF NOT EXISTS craft_details text[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS care_instructions text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS available_sizes text[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS size_chart jsonb NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS in_stock boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS stock_count integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS is_best_seller boolean NOT NULL DEFAULT false,

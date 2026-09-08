@@ -4,10 +4,12 @@ import { generateWhatsAppLink, STORE_WHATSAPP_NUMBER } from '../utils/formatters
 
 interface FooterProps {
   onOpenAdmin: () => void;
+  onOpenTracking?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenAdmin,
+  onOpenTracking,
 }) => {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
@@ -31,7 +33,7 @@ export const Footer: React.FC<FooterProps> = ({
         {/* Top Newsletter & Brand Statement */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-10 border-b border-[#3E3E3E] items-center">
           <div className="lg:col-span-6 space-y-2">
-            <span className="font-serif italic text-2xl sm:text-3xl tracking-[0.1em] uppercase font-normal block">
+            <span className="font-serif italic text-2xl sm:text-3xl tracking-widest uppercase font-normal block">
               BhuviSri Enterprises
             </span>
             <p className="text-xs text-[#A89F91] max-w-md font-light leading-relaxed">
@@ -132,6 +134,14 @@ export const Footer: React.FC<FooterProps> = ({
           </div>
 
           <div className="flex items-center gap-5">
+            {onOpenTracking && (
+              <button
+                onClick={onOpenTracking}
+                className="text-[#8C857D] hover:text-[#A68A64] cursor-pointer text-[10px] uppercase tracking-widest transition-colors"
+              >
+                Track Order
+              </button>
+            )}
             <button 
               id="footer-admin-login-btn"
               onClick={onOpenAdmin}

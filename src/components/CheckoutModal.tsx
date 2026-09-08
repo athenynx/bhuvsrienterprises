@@ -62,8 +62,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
 
   const subtotal = items.reduce((acc, i) => acc + i.itemTotal, 0);
-  const freeShippingThreshold = 2000;
-  const shippingFee = subtotal >= freeShippingThreshold || items.length === 0 ? 0 : 450;
+  const shippingFee = items.length === 0 ? 0 : 100;
   const totalAmount = Math.max(0, subtotal - discount + shippingFee);
 
   const handleDetailsSubmit = async (e: React.FormEvent) => {
@@ -71,8 +70,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     setAddressError(null);
     const normalizedPincode = customer.pincode.replace(/\D/g, '');
-    if (customer.address.trim().length < 10) {
-      setAddressError('Please enter a complete street address with house or building details.');
+    const address = customer.address.trim();
+    const phone = customer.phone.replace(/\D/g, '');
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!customer.name.trim() || !customer.email.trim() || !customer.city.trim() || !customer.state.trim() || !address || !customer.phone.trim() || !normalizedPincode) {
+      setAddressError('All name, email, phone, street address, city, state, and pincode fields are required.');
+      return;
+    }
+    if (!emailPattern.test(customer.email.trim().toLowerCase())) {
+      setAddressError('Enter a valid email address.');
+      return;
+    }
+    if (phone.length < 10 || phone.length > 15) {
+      setAddressError('Enter a valid WhatsApp mobile number.');
+      return;
+    }
+    if (address.length < 15 || !/\d/.test(address) || !/[a-zA-Z]/.test(address)) {
+      setAddressError('Enter a complete street address with building or house number, street name, and locality.');
       return;
     }
     if (normalizedPincode.length !== 6) {
@@ -131,11 +145,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           receipt: `order_${Date.now()}`,
         }),
       });
-      const order = await response.json();
-      if (!response.ok) throw new Error(order.error || 'Unable to start payment.');
+      const responseText = await response.text();
+      let order: { order_id?: string; amount?: number; currency?: string; error?: string } = {};
+      try {
+        order = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        throw new Error(`Payment service returned an invalid response (${response.status}).`);
+      }
+      if (!response.ok) {
+        throw new Error(order.error || `Unable to start payment (${response.status}).`);
+      }
+      if (!order.order_id || !order.amount || !order.currency) {
+        throw new Error('Payment service did not return a valid Razorpay order. Please try again.');
+      }
+
+      const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+      if (!razorpayKey) {
+        throw new Error('Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID.');
+      }
 
       const razorpay = new window.Razorpay({
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: razorpayKey,
         amount: order.amount,
         currency: order.currency,
         name: 'BhuviSri Enterprises',
@@ -150,9 +180,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payment),
             });
-            const verification = await verificationResponse.json();
+            const verificationText = await verificationResponse.text();
+            let verification: { verified?: boolean; error?: string } = {};
+            try {
+              verification = verificationText ? JSON.parse(verificationText) : {};
+            } catch {
+              throw new Error(`Payment verification returned an invalid response (${verificationResponse.status}).`);
+            }
             if (!verificationResponse.ok || !verification.verified) {
-              throw new Error(verification.error || 'Payment verification failed.');
+              throw new Error(verification.error || `Payment verification failed (${verificationResponse.status}).`);
             }
             await finalizeOrder('Paid', 'razorpay');
           } catch (error) {
@@ -319,6 +355,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <input
                       type="tel"
                       required
+                      minLength={10}
+                      maxLength={15}
                       value={customer.phone}
                       onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
                       className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2.5 text-xs text-[#2A2A2A]"
@@ -341,6 +379,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <input
                       type="text"
                       required
+                      minLength={15}
                       value={customer.address}
                       onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
                       className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2.5 text-xs text-[#2A2A2A]"
@@ -407,7 +446,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span className="text-[#6B655E] block uppercase tracking-wider text-[10px]">{items.length} Item(s) in Order</span>
                   <strong className="text-base text-[#2A2A2A]">{formatCurrency(totalAmount, currency)}</strong>
                 </div>
-                <span className="text-[#A68A64] font-bold uppercase tracking-wider text-[10px]">Free Insured Shipping</span>
+                  <span className="text-[#A68A64] font-bold uppercase tracking-wider text-[10px]">Insured Shipping • ₹100</span>
               </div>
 
               <div className="flex justify-end pt-2">
@@ -441,7 +480,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <button
                         type="button"
                         key={m.id}
-                        onClick={() => setPaymentMethod(m.id as any)}
+                        onClick={() => setPaymentMethod(m.id as 'razorpay' | 'cod')}
                         className={`p-3 border text-center text-xs flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           paymentMethod === m.id
                             ? 'bg-[#2A2A2A] text-white border-[#2A2A2A]'
@@ -530,7 +569,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <div>
                         <p className="font-medium text-[#2A2A2A]">{it.product.name} (x{it.quantity})</p>
                         <p className="text-[10px] text-[#6B655E]">
-                          Size: {it.selectedSize} {it.isCustomized ? '• Custom Tailored' : ''}
+                          {it.selectedSize ? `Size: ${it.selectedSize} ` : ''}{it.isCustomized ? '• Custom Tailored' : ''}
                         </p>
                       </div>
                       <span className="font-bold text-[#2A2A2A]">{formatCurrency(it.itemTotal, currency)}</span>

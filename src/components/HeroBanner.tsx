@@ -12,7 +12,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     <div id="hero-geometric-balance" className="flex flex-col border-b border-[#DCD7D0]">
       
       {/* Split Hero Section */}
-      <section className="flex flex-col lg:flex-row min-h-[500px] border-b border-[#DCD7D0]">
+      <section className="flex flex-col lg:flex-row min-h-125 border-b border-[#DCD7D0]">
         
         {/* Left Editorial Narrative */}
         <div className="w-full lg:w-1/2 p-8 sm:p-12 lg:p-20 flex flex-col justify-center border-b lg:border-b-0 lg:border-r border-[#DCD7D0] bg-[#F5F2ED]">
@@ -48,14 +48,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         </div>
 
         {/* Right Geometric Hero Image Panel */}
-        <div className="w-full lg:w-1/2 bg-[#EAE5DF] p-6 sm:p-10 lg:p-14 flex items-center justify-center relative min-h-[360px] lg:min-h-[500px]">
-          <div className="w-full aspect-[4/3] lg:aspect-auto lg:h-[380px] border border-[#DCD7D0] relative overflow-hidden group shadow-xs">
+        <div className="w-full lg:w-1/2 bg-[#EAE5DF] p-6 sm:p-10 lg:p-14 flex items-center justify-center relative min-h-90 lg:min-h-125">
+          <div className="w-full aspect-4/3 lg:aspect-auto lg:h-95 border border-[#DCD7D0] relative overflow-hidden group shadow-xs">
             <img
               src="/images/hero-sarees.jpg"
               alt="BhuviSri Enterprises Silk Drape"
               className="w-full h-full object-contain object-center transform transition-transform duration-700"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-t from-black/50 via-transparent to-transparent"></div>
             
             <div className="absolute bottom-6 left-6 text-white">
               <span className="text-[9px] uppercase tracking-[0.3em] font-medium text-[#DCD7D0] block mb-1">

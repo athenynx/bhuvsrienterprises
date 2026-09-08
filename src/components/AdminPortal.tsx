@@ -16,6 +16,7 @@ import {
   LogOut,
   Sparkles,
   Search,
+  MapPin,
   Image as ImageIcon,
   ArrowLeft,
   ArrowRight,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Product, ProductColorVariant, Order, OrderStatus, ProductCategory } from '../types';
 import { formatCurrency, generateWhatsAppLink, getOrderWhatsAppText } from '../utils/formatters';
+import { ShipmentManagement } from './ShipmentManagement';
 
 interface AdminPortalProps {
   isOpen: boolean;
@@ -62,7 +64,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Active Admin Tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'tracking' | 'settings'>('overview');
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
 
   // Product Manager State
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -87,7 +90,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const initialColorVariant: ProductColorVariant = {
     id: 'variant-new-1',
     name: '',
-    hex: '#000000',
     images: [],
   };
   const [colorVariants, setColorVariants] = useState<ProductColorVariant[]>([initialColorVariant]);
@@ -95,31 +97,101 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   const [fabric, setFabric] = useState('');
   const [color, setColor] = useState('');
-  const [colorHex, setColorHex] = useState('#000000');
   const [occasion, setOccasion] = useState('');
   const [description, setDescription] = useState('');
   const [craftDetails, setCraftDetails] = useState<string[]>([]);
   const [careInstructions, setCareInstructions] = useState('');
   const [availableSizes, setAvailableSizes] = useState('');
+  const [sizeChart, setSizeChart] = useState<Array<{ size: string; available: boolean; stock: number }>>([]);
   const [stockCount, setStockCount] = useState(0);
   const [inStock, setInStock] = useState(true);
   const [isBestSeller, setIsBestSeller] = useState(false);
   const [isNewArrival, setIsNewArrival] = useState(false);
 
+  const normalizeSizeInput = (sizeValue: string) => sizeValue
+    .split(',')
+    .map((size) => size.trim().toUpperCase())
+    .filter(Boolean);
+
+  const westernSizeOptions = ['S', 'M', 'L', 'XL', 'XXL'];
+
+  const syncSizeChartFromText = (text: string) => {
+    const normalizedSizes = normalizeSizeInput(text);
+    if (normalizedSizes.length === 0) {
+      setSizeChart([]);
+      setAvailableSizes('');
+      return;
+    }
+
+    setAvailableSizes(normalizedSizes.join(', '));
+    setSizeChart((prev) => {
+      const nextEntries = normalizedSizes.map((size) => {
+        const existing = prev.find((entry) => entry.size === size);
+        return {
+          size,
+          available: existing?.available ?? true,
+          stock: existing?.stock ?? 5,
+        };
+      });
+      return nextEntries;
+    });
+  };
+
+  const toggleWesternSize = (size: string) => {
+    const currentSizes = normalizeSizeInput(availableSizes);
+    const nextSizes = currentSizes.includes(size)
+      ? currentSizes.filter((currentSize) => currentSize !== size)
+      : [...currentSizes, size];
+    syncSizeChartFromText(nextSizes.join(', '));
+  };
+
+  const updateSizeChartEntry = (size: string, patch: Partial<{ available: boolean; stock: number }>) => {
+    setSizeChart((prev) => {
+      const next = [...prev];
+      const index = next.findIndex((entry) => entry.size === size);
+      if (index >= 0) {
+        next[index] = { ...next[index], ...patch };
+      } else {
+        next.push({ size, available: patch.available ?? true, stock: patch.stock ?? 5 });
+      }
+      const sorted = next.sort((a, b) => westernSizeOptions.indexOf(a.size) - westernSizeOptions.indexOf(b.size));
+      setAvailableSizes(sorted.map((entry) => entry.size).join(', '));
+      return sorted;
+    });
+  };
+
   const saveActiveVariantImages = () => {
     if (!activeColorVariantId) return;
     setColorVariants(prev => prev.map(variant => (
       variant.id === activeColorVariantId
-        ? { ...variant, name: color.trim() || variant.name, hex: colorHex.trim() || variant.hex, images: imageGallery }
+        ? { ...variant, name: color.trim() || variant.name, images: imageGallery }
         : variant
     )));
+  };
+
+  const ensureSizeChartForProduct = (textValue: string) => {
+    const normalizedSizes = normalizeSizeInput(textValue);
+    if (normalizedSizes.length === 0) {
+      setSizeChart([]);
+      return;
+    }
+
+    const nextSizeChart = normalizedSizes.map((size) => {
+      const existing = sizeChart.find((entry) => entry.size === size);
+      return {
+        size,
+        available: existing?.available ?? true,
+        stock: existing?.stock ?? 5,
+      };
+    });
+    setSizeChart(nextSizeChart);
+    setAvailableSizes(normalizedSizes.join(', '));
   };
 
   const selectColorVariant = (variant: ProductColorVariant) => {
     saveActiveVariantImages();
     setActiveColorVariantId(variant.id);
     setColor(variant.name);
-    setColorHex(variant.hex);
     setImageGallery([...variant.images]);
   };
 
@@ -128,13 +200,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     const variant: ProductColorVariant = {
       id: `variant-${Date.now()}`,
       name: '',
-      hex: '#D4AF37',
       images: [],
     };
     setColorVariants(prev => [...prev, variant]);
     setActiveColorVariantId(variant.id);
     setColor(variant.name);
-    setColorHex(variant.hex);
     setImageGallery([]);
   };
 
@@ -145,7 +215,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       const next = remaining[0];
       setActiveColorVariantId(next?.id ?? null);
       setColor(next?.name ?? '');
-      setColorHex(next?.hex ?? '#000000');
       setImageGallery(next ? [...next.images] : []);
     }
   };
@@ -176,6 +245,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const processFiles = async (files: FileList | File[]) => {
     if (!activeColorVariantId) {
       setUploadStatusMsg('Select a colour variant before uploading photos.');
+      setTimeout(() => setUploadStatusMsg(null), 3500);
+      return;
+    }
+    if (!color.trim()) {
+      setUploadStatusMsg('Enter the colour name before uploading photos so they stay linked to this variant.');
       setTimeout(() => setUploadStatusMsg(null), 3500);
       return;
     }
@@ -255,6 +329,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Bulk URL Adder (handles single URL or comma/newline separated URLs)
   const handleAddImageUrls = () => {
     if (!imageUrlInput.trim()) return;
+    if (!activeColorVariantId || !color.trim()) {
+      setUploadStatusMsg('Select and name a colour variant before adding image URLs.');
+      setTimeout(() => setUploadStatusMsg(null), 3500);
+      return;
+    }
 
     const urls = imageUrlInput
       .split(/[\n,]+/)
@@ -312,13 +391,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     const parsedPrice = Number(price);
     const parsedOriginalPrice = Number(originalPrice || 0);
     const parsedStockCount = Number(stockCount);
-    const normalizedSizes = availableSizes
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const savedVariants = colorVariants.length
-      ? colorVariants.map(variant => variant.id === activeColorVariantId ? { ...variant, name: color.trim(), hex: colorHex.trim() || '#000000', images: imageGallery } : variant)
-      : [{ id: `variant-${Date.now()}`, name: color.trim(), hex: colorHex.trim() || '#000000', images: imageGallery }];
+    const fallbackWesternSizes = category === 'western' && /(t[- ]?shirt|tshirt|tee|shirt|pant|pants)/i.test(`${name} ${subcategory}`)
+      ? westernSizeOptions
+      : [];
+    const normalizedSizes = normalizeSizeInput(availableSizes);
+    const chartToSave = sizeChart.length > 0 ? sizeChart : normalizedSizes.map((size) => ({ size, available: true, stock: parsedStockCount > 0 ? Math.max(1, Math.floor(parsedStockCount / Math.max(normalizedSizes.length, 1))) : 0 }));
+    const mergedSizes = normalizedSizes.length > 0 ? normalizedSizes : fallbackWesternSizes;
+    const variantDrafts = colorVariants.length
+      ? colorVariants.map(variant => variant.id === activeColorVariantId ? { ...variant, name: color.trim(), images: imageGallery } : variant)
+      : [{ id: `variant-${Date.now()}`, name: color.trim(), images: imageGallery }];
+    const savedVariants = variantDrafts.filter((variant) => variant.name.trim());
     const allVariantImages = Array.from(new Set(savedVariants.flatMap(variant => variant.images)));
 
     if (!trimmedName) {
@@ -357,7 +439,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       return;
     }
 
-    const sku = editingProduct ? editingProduct.sku : `AL-${category.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    const sku = editingProduct
+      ? editingProduct.sku
+      : `BS-${category.substring(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
     const productPayload: Product = {
       id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
       sku,
@@ -370,13 +454,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       images: allVariantImages,
       fabric: fabric.trim(),
       color: color.trim(),
-      colorHex: colorHex.trim() || '#000000',
       colorVariants: savedVariants,
       occasion: occasion.trim(),
       description: description.trim(),
       craftDetails: craftDetails.length ? craftDetails : [],
       careInstructions: careInstructions.trim(),
-      availableSizes: normalizedSizes,
+      availableSizes: mergedSizes,
+      sizeChart: chartToSave,
       inStock: inStock && parsedStockCount > 0,
       stockCount: parsedStockCount,
       isBestSeller,
@@ -414,8 +498,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setImageUrlInput('');
     setFabric(prod.fabric);
     setColor(prod.color);
-    setColorHex(prod.colorHex);
-    const variants = prod.colorVariants?.length ? prod.colorVariants : [{ id: `variant-${prod.id}`, name: prod.color, hex: prod.colorHex, images: prod.images }];
+    const variants = prod.colorVariants?.length ? prod.colorVariants : [{ id: `variant-${prod.id}`, name: prod.color, images: prod.images }];
     setColorVariants(variants);
     setActiveColorVariantId(variants[0].id);
     setImageGallery([...variants[0].images]);
@@ -424,6 +507,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCraftDetails(prod.craftDetails ?? []);
     setCareInstructions(prod.careInstructions || '');
     setAvailableSizes(prod.availableSizes.join(', '));
+    setSizeChart(prod.sizeChart && prod.sizeChart.length > 0 ? prod.sizeChart : prod.availableSizes.map((size) => ({ size, available: true, stock: prod.stockCount }))); 
     setStockCount(prod.stockCount);
     setInStock(prod.inStock);
     setIsBestSeller(Boolean(prod.isBestSeller));
@@ -443,7 +527,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setImageUrlInput('');
     setFabric('');
     setColor('');
-    setColorHex('#000000');
     setColorVariants([{ ...initialColorVariant, images: [] }]);
     setActiveColorVariantId(initialColorVariant.id);
     setOccasion('');
@@ -451,6 +534,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCraftDetails([]);
     setCareInstructions('');
     setAvailableSizes('');
+    setSizeChart([]);
     setStockCount(0);
     setInStock(true);
     setIsBestSeller(false);
@@ -463,10 +547,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const activeOrdersCount = orders.filter((o) => o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 lg:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-stretch justify-center animate-in fade-in duration-200">
       <div 
         id="admin-owner-portal"
-        className="relative bg-[#F5F2ED] w-full max-w-6xl border border-[#DCD7D0] shadow-2xl overflow-hidden max-h-[94vh] flex flex-col"
+        className="relative bg-[#F5F2ED] w-full min-h-screen border-x border-[#DCD7D0] shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -549,7 +633,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your Supabase Auth password"
                       className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2.5 pr-10 text-xs text-[#2A2A2A] focus:outline-none focus:border-[#2A2A2A]"
                     />
                     <button
@@ -590,13 +673,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 { id: 'overview', label: 'Overview', icon: Sparkles },
                 { id: 'products', label: `Catalog (${products.length})`, icon: Package },
                 { id: 'orders', label: `Orders (${orders.length})`, icon: Truck },
+                { id: 'tracking', label: 'Live Tracking', icon: MapPin },
                 { id: 'settings', label: 'Settings', icon: Settings },
               ].map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
+                    onClick={() => setActiveTab(tab.id as 'overview' | 'products' | 'orders' | 'tracking' | 'settings')}
                     className={`py-3.5 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'border-[#2A2A2A] text-[#2A2A2A]'
@@ -706,7 +790,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <Search size={13} className="absolute left-3 top-2.5 text-[#6B655E]" />
                       <input
                         type="text"
-                        placeholder="Search products by title, fabric, or SKU..."
+                        placeholder="Search products by title, fabric, or Product ID..."
                         value={productSearch}
                         onChange={(e) => setProductSearch(e.target.value)}
                         className="w-full bg-[#EAE5DF] border border-[#DCD7D0] pl-8 pr-3 py-1.5 text-xs text-[#2A2A2A] focus:outline-none"
@@ -858,7 +942,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         {orders
                           .filter((o) => orderStatusFilter === 'All' || o.orderStatus === orderStatusFilter)
                           .map((ord) => (
-                            <tr key={ord.id} className="hover:bg-[#F5F2ED] transition-colors">
+                            <React.Fragment key={ord.id}>
+                              <tr className="hover:bg-[#F5F2ED] transition-colors">
                               <td className="p-3">
                                 <strong className="font-mono text-[#2A2A2A] block">#{ord.orderNumber}</strong>
                                 <span className="text-[10px] text-[#6B655E]">{ord.date}</span>
@@ -894,20 +979,37 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 </select>
                               </td>
                               <td className="p-3 text-right">
-                                <button
-                                  onClick={() => {
-                                    const msg = getOrderWhatsAppText(ord.orderNumber, ord.customer.name, ord.orderStatus);
-                                    const link = generateWhatsAppLink(ord.customer.phone, msg);
-                                    window.open(link, '_blank');
-                                  }}
-                                  className="p-1.5 bg-[#25D366] text-white cursor-pointer inline-flex items-center gap-1 text-[10px] uppercase font-bold"
-                                  title="Send WhatsApp Update"
-                                >
-                                  <MessageCircle size={13} />
-                                  <span>Notify</span>
-                                </button>
+                                <div className="flex justify-end gap-2 flex-wrap">
+                                  <button
+                                    onClick={() => setTrackingOrderId(trackingOrderId === ord.id ? null : ord.id)}
+                                    className="p-1.5 bg-[#A68A64] text-white cursor-pointer inline-flex items-center gap-1 text-[10px] uppercase font-bold"
+                                  >
+                                    <Truck size={13} />
+                                    <span>{trackingOrderId === ord.id ? 'Close Tracking' : 'Manage Tracking'}</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const msg = getOrderWhatsAppText(ord.orderNumber, ord.customer.name, ord.orderStatus);
+                                      const link = generateWhatsAppLink(ord.customer.phone, msg);
+                                      window.open(link, '_blank');
+                                    }}
+                                    className="p-1.5 bg-[#25D366] text-white cursor-pointer inline-flex items-center gap-1 text-[10px] uppercase font-bold"
+                                    title="Send WhatsApp Update"
+                                  >
+                                    <MessageCircle size={13} />
+                                    <span>Notify</span>
+                                  </button>
+                                </div>
                               </td>
-                            </tr>
+                              </tr>
+                              {trackingOrderId === ord.id && (
+                                <tr>
+                                  <td colSpan={6} className="p-4 bg-[#F5F2ED]">
+                                    <ShipmentManagement order={ord} />
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           ))}
                       </tbody>
                     </table>
@@ -915,7 +1017,51 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </div>
               )}
 
-              {/* TAB 4: SETTINGS */}
+              {/* TAB 4: LIVE TRACKING WORKSPACE */}
+              {activeTab === 'tracking' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 text-[#A68A64] text-[10px] uppercase tracking-[0.25em] font-bold mb-2">
+                        <MapPin size={14} /> Customer-facing updates
+                      </div>
+                      <h2 className="font-serif italic text-3xl text-[#2A2A2A]">Live Shipment Control</h2>
+                      <p className="text-xs text-[#6B655E] mt-2 max-w-xl">Select an order to create its shipment or publish the next status, location, description, and delivery estimate. Every saved update appears in Track Order.</p>
+                    </div>
+                    <label className="w-full lg:w-80 text-[10px] uppercase tracking-wider font-bold text-[#6B655E]">
+                      Select Order
+                      <select
+                        value={trackingOrderId ?? ''}
+                        onChange={(event) => setTrackingOrderId(event.target.value || null)}
+                        className="mt-1 w-full bg-white border border-[#DCD7D0] px-3 py-2.5 text-xs text-[#2A2A2A]"
+                      >
+                        <option value="">Choose an order to update</option>
+                        {orders.map((order) => (
+                          <option key={order.id} value={order.id}>
+                            {order.orderNumber} • {order.customer.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {trackingOrderId ? (
+                    <div className="bg-white border border-[#DCD7D0] p-4 sm:p-6">
+                      <ShipmentManagement order={orders.find((order) => order.id === trackingOrderId)!} />
+                    </div>
+                  ) : (
+                    <div className="min-h-64 border border-dashed border-[#C9C2B9] bg-[#EAE5DF] flex items-center justify-center text-center p-8">
+                      <div>
+                        <Truck size={30} className="mx-auto text-[#A68A64] mb-3" />
+                        <p className="text-xs uppercase tracking-[0.2em] font-bold text-[#2A2A2A]">Choose an order to begin</p>
+                        <p className="text-xs text-[#6B655E] mt-2">Shipment creation and live status controls will appear here.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 5: SETTINGS */}
               {activeTab === 'settings' && (
                 <div className="max-w-xl space-y-6 text-xs">
                   <div className="bg-[#EAE5DF] p-5 border border-[#DCD7D0] space-y-3">
@@ -1072,13 +1218,92 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </div>
                 </div>
 
+                {/* SIZE CHART & FIT GUIDE */}
+                <div className="bg-[#EAE5DF] p-4 border border-[#DCD7D0] space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A]">Size Chart & Fit Guide</label>
+                    <span className="text-[9px] uppercase tracking-wider text-[#6B655E]">Visible to shoppers</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider font-bold text-[#6B655E] mb-1">Available Sizes</label>
+                      <input
+                        type="text"
+                        value={availableSizes}
+                        onChange={(e) => {
+                          const nextText = e.target.value;
+                          setAvailableSizes(nextText);
+                          ensureSizeChartForProduct(nextText);
+                        }}
+                        placeholder="S, M, L, XL, XXL"
+                        className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider font-bold text-[#6B655E] mb-1">Occasion / Festive</label>
+                      <input
+                        type="text"
+                        value={occasion}
+                        onChange={(e) => setOccasion(e.target.value)}
+                        placeholder=""
+                        className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-2">
+                    {(sizeChart.length > 0 ? sizeChart : westernSizeOptions.map((size) => ({ size, available: true, stock: 5 }))).map((entry) => {
+                      const isSelected = normalizeSizeInput(availableSizes).includes(entry.size);
+                      return (
+                        <button
+                          key={entry.size}
+                          type="button"
+                          onClick={() => toggleWesternSize(entry.size)}
+                          className={`px-2 py-2 border text-[10px] font-bold uppercase tracking-wide cursor-pointer ${isSelected ? 'bg-[#2A2A2A] text-white border-[#2A2A2A]' : 'border-[#DCD7D0] text-[#2A2A2A] bg-[#F5F2ED]'}`}
+                        >
+                          <div>{entry.size}</div>
+                          <small className="block text-[8px] opacity-80">{isSelected ? 'Added' : 'Add'}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {sizeChart.length > 0 && (
+                    <div className="rounded border border-[#DCD7D0] bg-[#F5F2ED] p-2">
+                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A] mb-2">
+                        <span>Size</span>
+                        <span>Stock</span>
+                        <span>Available</span>
+                      </div>
+                      <div className="space-y-2">
+                        {sizeChart.map((entry) => (
+                          <div key={entry.size} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-[10px] uppercase tracking-wider">
+                            <span className="font-bold text-[#2A2A2A]">{entry.size}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={entry.stock}
+                              onChange={(e) => updateSizeChartEntry(entry.size, { stock: Math.max(0, Number(e.target.value) || 0) })}
+                              className="w-16 bg-white border border-[#DCD7D0] p-1 text-xs text-[#2A2A2A]"
+                            />
+                            <label className="flex items-center gap-1 text-[#6B655E]">
+                              <input type="checkbox" checked={entry.available} onChange={(e) => updateSizeChartEntry(entry.size, { available: e.target.checked })} />
+                              <span>Yes</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* MULTI-IMAGE UPLOAD SUITE */}
                 <div className="bg-[#EAE5DF] p-4 border border-[#DCD7D0] space-y-3">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <ImageIcon size={16} className="text-[#2A2A2A]" />
                       <label className="text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A]">
-                        {color} Image Gallery ({imageGallery.length} photo{imageGallery.length === 1 ? '' : 's'})
+                        {color.trim() || 'Unnamed colour'} Image Gallery ({imageGallery.length} photo{imageGallery.length === 1 ? '' : 's'})
                       </label>
                     </div>
 
@@ -1254,8 +1479,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <input
                       type="text"
                       value={color}
-                      onChange={(e) => setColor(e.target.value)}
-                      placeholder=""
+                      onChange={(e) => {
+                        const nextColor = e.target.value;
+                        setColor(nextColor);
+                        if (activeColorVariantId) {
+                          setColorVariants((variants) => variants.map((variant) => (
+                            variant.id === activeColorVariantId ? { ...variant, name: nextColor } : variant
+                          )));
+                        }
+                      }}
+                      placeholder="Name the selected colour variant"
                       className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs"
                     />
                   </div>
@@ -1295,9 +1528,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             onClick={() => selectColorVariant(variant)}
                             className="flex flex-1 items-center gap-2 text-left cursor-pointer min-w-0"
                           >
-                            <span className="w-5 h-5 border border-[#DCD7D0] shrink-0" style={{ backgroundColor: variant.hex }} />
+                            <span className="w-5 h-5 border border-[#DCD7D0] bg-[#DCD7D0] shrink-0" />
                             <span className="truncate text-xs text-[#2A2A2A]">{variant.name}</span>
                             <span className="text-[9px] text-[#6B655E] ml-auto shrink-0">{activeColorVariantId === variant.id ? imageGallery.length : variant.images.length} photo{(activeColorVariantId === variant.id ? imageGallery.length : variant.images.length) === 1 ? '' : 's'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              selectColorVariant(variant);
+                              window.setTimeout(() => fileInputRef.current?.click(), 0);
+                            }}
+                            className="px-2 py-1 text-[9px] uppercase tracking-wider font-bold text-[#2A2A2A] border border-[#DCD7D0] hover:border-[#2A2A2A] cursor-pointer inline-flex items-center gap-1"
+                            title={`Add photos to ${variant.name || 'this colour variant'}`}
+                          >
+                            <ImageIcon size={11} /> Add Photo
                           </button>
                           <button
                             type="button"
@@ -1326,7 +1570,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         return (
                           <div key={variant.id} className="space-y-1.5">
                             <div className="flex items-center gap-1.5">
-                              <span className="w-3.5 h-3.5 border border-[#DCD7D0] shrink-0" style={{ backgroundColor: variant.hex }} />
+                              <span className="w-3.5 h-3.5 border border-[#DCD7D0] bg-[#DCD7D0] shrink-0" />
                               <span className="text-[9px] uppercase tracking-wider font-bold text-[#2A2A2A]">{variant.name}</span>
                               <span className="text-[9px] text-[#6B655E]">({images.length} photo{images.length === 1 ? '' : 's'})</span>
                             </div>
@@ -1346,16 +1590,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                 {/* Available Sizes & Occasion */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] uppercase tracking-wider font-bold text-[#6B655E] mb-1">Available Sizes (comma separated)</label>
-                    <input
-                      type="text"
-                      value={availableSizes}
-                      onChange={(e) => setAvailableSizes(e.target.value)}
-                      placeholder=""
-                      className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs"
-                    />
-                  </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wider font-bold text-[#6B655E] mb-1">Occasion / Festive</label>
                     <input

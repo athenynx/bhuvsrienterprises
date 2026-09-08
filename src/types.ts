@@ -33,8 +33,13 @@ export interface Review {
 export interface ProductColorVariant {
   id: string;
   name: string;
-  hex: string;
   images: string[];
+}
+
+export interface ProductSizeEntry {
+  size: string;
+  available: boolean;
+  stock: number;
 }
 
 export interface Product {
@@ -49,13 +54,13 @@ export interface Product {
   images: string[];
   fabric: string;
   color: string;
-  colorHex: string;
   colorVariants?: ProductColorVariant[];
   occasion: string;
   description: string;
   craftDetails: string[];
   careInstructions: string;
   availableSizes: string[];
+  sizeChart?: ProductSizeEntry[];
   inStock: boolean;
   stockCount: number;
   isBestSeller?: boolean;
@@ -67,6 +72,77 @@ export interface Product {
   customizationBasePrice?: number;
   isActive?: boolean;
 }
+
+export const WESTERN_SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'XXL'];
+
+export const getWesternSizeOptions = (productName = '', subcategory = '') => {
+  const combined = `${productName} ${subcategory}`.toLowerCase();
+  const isWesternSizingProduct = /(t[- ]?shirt|tshirt|tee|shirt|pant|pants)/.test(combined);
+  return isWesternSizingProduct ? WESTERN_SIZE_OPTIONS : [];
+};
+
+export const buildSizeChart = (availableSizes: string[], fallbackProductName = '', fallbackSubcategory = '') => {
+  const normalized = Array.from(new Set((availableSizes || [])
+    .map((size) => String(size).trim())
+    .filter(Boolean)
+    .map((size) => size.toUpperCase().replace(/\s+/g, ''))));
+
+  const baseSizes = normalized.length > 0 ? normalized : getWesternSizeOptions(fallbackProductName, fallbackSubcategory);
+
+  return baseSizes.map((size) => ({
+    size,
+    available: true,
+    stock: 5,
+  }));
+};
+
+export const getWesternSizeGuide = (productName = '', subcategory = '', sizeList: string[] = []) => {
+  const combined = `${productName} ${subcategory}`.toLowerCase();
+  const isPantProduct = /(pant|pants|trouser|jeans|chino|jogger)/.test(combined);
+  const sizes = sizeList.length > 0 ? sizeList : WESTERN_SIZE_OPTIONS;
+  const guide = {
+    S: isPantProduct ? { waist: '28-30', length: '30' } : { chest: '36-38', length: '27' },
+    M: isPantProduct ? { waist: '30-32', length: '30' } : { chest: '39-41', length: '28' },
+    L: isPantProduct ? { waist: '32-34', length: '31' } : { chest: '42-44', length: '29' },
+    XL: isPantProduct ? { waist: '34-36', length: '32' } : { chest: '45-47', length: '30' },
+    XXL: isPantProduct ? { waist: '36-38', length: '32' } : { chest: '48-50', length: '31' },
+  } as Record<string, { chest?: string; waist?: string; length: string }>;
+
+  return sizes
+    .map((size) => {
+      const normalizedSize = String(size).trim().toUpperCase();
+      const measurement = guide[normalizedSize] ?? { length: 'Standard' };
+      return {
+        size: normalizedSize,
+        chest: measurement.chest ?? (isPantProduct ? '—' : '—'),
+        waist: measurement.waist ?? (isPantProduct ? '—' : '—'),
+        length: measurement.length,
+      };
+    })
+    .filter((entry) => Boolean(entry.size));
+};
+
+export const normalizeProductSizeChart = (chart: unknown, availableSizes: string[] = [], fallbackProductName = '', fallbackSubcategory = '') => {
+  const parsed = Array.isArray(chart)
+    ? chart
+    : [];
+
+  const entries = parsed
+    .map((entry: any) => {
+      const size = String(entry?.size ?? '').trim().toUpperCase();
+      if (!size) return null;
+      return {
+        size,
+        available: entry?.available !== false,
+        stock: Math.max(0, Number(entry?.stock) || 0),
+      };
+    })
+    .filter(Boolean) as ProductSizeEntry[];
+
+  if (entries.length > 0) return entries;
+
+  return buildSizeChart(availableSizes, fallbackProductName, fallbackSubcategory);
+};
 
 export interface CartItem {
   id: string; // unique for this cart instance

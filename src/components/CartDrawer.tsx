@@ -43,10 +43,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [couponFeedback, setCouponFeedback] = useState<string | null>(null);
 
   const subtotal = items.reduce((acc, item) => acc + item.itemTotal, 0);
-  const freeShippingThreshold = 2000;
-  const progressToFreeShipping = Math.min(100, (subtotal / freeShippingThreshold) * 100);
-  const remainingForFreeShipping = Math.max(0, freeShippingThreshold - subtotal);
-  const shippingFee = subtotal >= freeShippingThreshold || items.length === 0 ? 0 : 450;
+  const shippingFee = items.length === 0 ? 0 : 100;
   const total = Math.max(0, subtotal - discount + shippingFee);
 
   const handleApplyCoupon = (e: React.FormEvent) => {
@@ -61,7 +58,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     const itemsList = items
       .map(
         (i, idx) =>
-          `${idx + 1}. *${i.product.name}* (Size: ${i.selectedSize}, Qty: ${i.quantity}) - ₹${i.itemTotal.toLocaleString('en-IN')}`
+          `${idx + 1}. *${i.product.name}* (${i.selectedColor ? `Colour: ${i.selectedColor}, ` : ''}${i.selectedSize ? `Size: ${i.selectedSize}, ` : ''}Qty: ${i.quantity}) - ₹${i.itemTotal.toLocaleString('en-IN')}`
       )
       .join('\n');
 
@@ -94,21 +91,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </button>
         </div>
 
-        {/* Free Shipping Progress Bar */}
+        {/* Shipping Summary */}
         <div className="bg-[#F5F2ED] px-5 py-3 border-b border-[#DCD7D0]">
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-wider mb-1.5 text-[#2A2A2A]">
-            <span>
-              {remainingForFreeShipping === 0
-                ? '✨ Unlocked Free Worldwide Shipping'
-                : `Add ${formatCurrency(remainingForFreeShipping, currency)} for Free Shipping`}
-            </span>
-            <span className="font-mono font-bold text-[#A68A64]">{Math.round(progressToFreeShipping)}%</span>
-          </div>
-          <div className="w-full bg-[#EAE5DF] h-1 border border-[#DCD7D0] overflow-hidden">
-            <div
-              className="bg-[#2A2A2A] h-full transition-all duration-500"
-              style={{ width: `${progressToFreeShipping}%` }}
-            ></div>
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-[#2A2A2A]">
+            <span>Shipping</span>
+            <span className="font-mono font-bold text-[#A68A64]">{formatCurrency(shippingFee, currency)}</span>
           </div>
         </div>
 
@@ -136,7 +123,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 {/* Thumbnail */}
                 <div className="w-16 h-20 overflow-hidden bg-[#F0EDE9] shrink-0 border border-[#DCD7D0]">
                   <img
-                    src={item.product.images[0]}
+                    src={item.product.images?.[0] || item.product.colorVariants?.[0]?.images?.[0] || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80'}
                     alt={item.product.name}
                     className="w-full h-full object-cover object-top"
                   />
@@ -151,9 +138,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </h2>
                     </div>
 
-                    <p className="text-[10px] uppercase tracking-wider text-[#6B655E] mt-0.5">
+                    {item.selectedSize && <p className="text-[10px] uppercase tracking-wider text-[#6B655E] mt-0.5">
                       Size: <strong className="text-[#2A2A2A]">{item.selectedSize}</strong>
-                    </p>
+                    </p>}
+                    {item.selectedColor && (
+                      <p className="text-[10px] uppercase tracking-wider text-[#6B655E] mt-0.5">
+                        Colour: <strong className="text-[#2A2A2A]">{item.selectedColor}</strong>
+                      </p>
+                    )}
 
                   </div>
 
@@ -203,7 +195,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <Tag size={12} className="absolute left-2.5 top-2.5 text-[#6B655E]" />
                 <input
                   type="text"
-                  placeholder="Coupon: AURA10"
+                  placeholder="Coupon: BHUVI10 or BHUVI15"
                   value={inputCoupon}
                   onChange={(e) => setInputCoupon(e.target.value)}
                   className="w-full bg-[#F5F2ED] border border-[#DCD7D0] pl-7 pr-2 py-1.5 text-xs text-[#2A2A2A] uppercase focus:outline-none"

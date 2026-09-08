@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Order, Shipment } from '../types';
+import { Order, Shipment, ShipmentStatus } from '../types';
 import { shipmentService } from '../lib/shipmentService';
 import { carrierRegistry } from '../lib/carrierIntegration';
 import { X, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -37,16 +37,17 @@ export const ShipmentManagement: React.FC<ShipmentManagementProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (order.shipmentId) {
+    if (order.shipmentId || order.id) {
       loadShipment();
     }
   }, [order.shipmentId]);
 
   const loadShipment = async () => {
-    if (!order.shipmentId) return;
     setIsLoading(true);
     try {
-      const result = await shipmentService.getShipmentById(order.shipmentId);
+      const result = order.shipmentId
+        ? await shipmentService.getShipmentById(order.shipmentId)
+        : await shipmentService.getShipmentByOrderId(order.id);
       if (result) {
         setShipment(result);
         setError(null);
@@ -77,13 +78,15 @@ export const ShipmentManagement: React.FC<ShipmentManagementProps> = ({
       );
 
       if (newShipment) {
-        // Update location and delivery date if provided
+        // Persist the initial route details for the customer tracking view.
         if (originLocation || destinationLocation || estimatedDelivery) {
-          await shipmentService.updateShipmentStatus(
+          await shipmentService.updateShipmentDetails(
             newShipment.id,
-            'SHIPPED',
-            originLocation || undefined,
-            estimatedDelivery ? new Date(estimatedDelivery).toISOString() : undefined
+            {
+              originLocation: originLocation || undefined,
+              destinationLocation: destinationLocation || undefined,
+              estimatedDeliveryDate: estimatedDelivery ? new Date(estimatedDelivery).toISOString() : undefined,
+            }
           );
         }
 
@@ -117,13 +120,23 @@ export const ShipmentManagement: React.FC<ShipmentManagementProps> = ({
     setError(null);
 
     try {
-      await shipmentService.addTrackingEvent(
+      const trackingEvent = await shipmentService.addTrackingEvent(
         shipment.id,
-        newStatus as any,
+        newStatus as ShipmentStatus,
         newLocation || undefined,
         newDescription,
         {}
       );
+      if (!trackingEvent) {
+        setError('Could not save the tracking update. Please try again.');
+        return;
+      }
+      if (newLocation || estimatedDelivery) {
+        await shipmentService.updateShipmentDetails(shipment.id, {
+          currentLocation: newLocation || undefined,
+          estimatedDeliveryDate: new Date(estimatedDelivery).toISOString(),
+        });
+      }
 
       // Reload shipment
       await loadShipment();
@@ -148,7 +161,7 @@ export const ShipmentManagement: React.FC<ShipmentManagementProps> = ({
     try {
       await shipmentService.updateShipmentStatus(
         shipment.id,
-        newStatus as any,
+        newStatus as ShipmentStatus,
         newLocation || undefined,
         estimatedDelivery ? new Date(estimatedDelivery).toISOString() : undefined
       );
@@ -190,8 +203,11 @@ export const ShipmentManagement: React.FC<ShipmentManagementProps> = ({
     'IN_TRANSIT',
     'OUT_FOR_DELIVERY',
     'DELIVERED',
+    'DELIVERY_ATTEMPTED',
     'DELAYED',
     'CANCELLED',
+    'RETURNED',
+    'REFUNDED',
   ];
 
   return (
@@ -460,6 +476,18 @@ export const ShipmentManagement: React.FC<ShipmentManagementProps> = ({
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="e.g., Package in transit to destination"
                 rows={2}
+                className="w-full px-3 py-2 border border-[#DCD7D0] rounded text-[#2A2A2A] text-sm focus:outline-none focus:border-[#A68A64]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[#6B655E] uppercase tracking-wider font-bold text-[9px] mb-1">
+                Estimated Delivery Date
+              </label>
+              <input
+                type="date"
+                value={estimatedDelivery}
+                onChange={(e) => setEstimatedDelivery(e.target.value)}
                 className="w-full px-3 py-2 border border-[#DCD7D0] rounded text-[#2A2A2A] text-sm focus:outline-none focus:border-[#A68A64]"
               />
             </div>

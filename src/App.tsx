@@ -11,7 +11,9 @@ import { AdminPortal } from './components/AdminPortal';
 import { UserAccountModal } from './components/UserAccountModal';
 import { WhatsAppWidget } from './components/WhatsAppWidget';
 import { Footer } from './components/Footer';
+import { OrderTrackingPage } from './components/OrderTrackingPage';
 import { supabase } from './lib/supabase';
+import { shipmentService } from './lib/shipmentService';
 
 
 import { 
@@ -22,48 +24,78 @@ import {
   ProductCategory, 
   CustomizationDetails, 
   OrderStatus,
-  Review
+  ShipmentStatus,
+  Review,
+  buildSizeChart,
+  getWesternSizeOptions,
+  normalizeProductSizeChart,
 } from './types';
 import { generateWhatsAppLink } from './utils/formatters';
 
-const mapProductRow = (item: any): Product => ({
-  id: String(item.id ?? ''),
-  sku: item.sku || `SKU-${String(item.id ?? 'product').slice(0, 8)}`,
-  name: item.name ?? '',
-  tagline: item.tagline ?? '',
-  category: (item.category as ProductCategory) || 'sarees',
-  subcategory: item.subcategory ?? '',
-  price: Number(item.price) || 0,
-  originalPrice: item.original_price == null ? undefined : Number(item.original_price),
-  images: item.images?.length ? item.images : item.image_url ? [item.image_url] : [],
-  fabric: item.fabric ?? '',
-  color: item.color ?? '',
-  colorHex: item.color_hex ?? '#000000',
-  colorVariants: item.color_variants ?? undefined,
-  occasion: item.occasion ?? '',
-  description: item.description ?? '',
-  craftDetails: item.craft_details ?? [],
-  careInstructions: item.care_instructions ?? '',
-  availableSizes: item.available_sizes ?? [],
-  inStock: item.in_stock ?? true,
-  stockCount: Number(item.stock_count) || 0,
-  isBestSeller: item.is_best_seller ?? false,
-  isNewArrival: item.is_new_arrival ?? false,
-  isCustomizable: item.is_customizable ?? false,
-  rating: Number(item.rating) || 0,
-  reviewCount: Number(item.review_count) || 0,
-  reviews: (item.reviews ?? []).map((review: any): Review => ({
-    id: review.id,
-    author: review.author ?? '',
-    rating: Number(review.rating) || 0,
-    date: review.date ?? review.created_at ?? '',
-    comment: review.comment ?? '',
-    verified: review.verified ?? false,
-    location: review.location ?? undefined,
-  })),
-  customizationBasePrice: item.customization_base_price == null ? undefined : Number(item.customization_base_price),
-  isActive: item.is_active ?? true,
-});
+const normalizeAvailableSizes = (sizes: unknown, fallbackName = '', fallbackSubcategory = '') => {
+  const rawSizes = Array.isArray(sizes)
+    ? sizes
+    : typeof sizes === 'string'
+      ? sizes.split(',')
+      : [];
+
+  const mapped = rawSizes
+    .map((size) => String(size).trim())
+    .filter(Boolean)
+    .map((size) => size.toUpperCase().replace(/\s+/g, ''))
+    .filter((size) => size.length > 0);
+
+  const deduped = Array.from(new Set(mapped));
+  if (deduped.length > 0) return deduped;
+
+  const defaultWesternSizes = getWesternSizeOptions(fallbackName, fallbackSubcategory);
+  return defaultWesternSizes.length > 0 ? [...defaultWesternSizes] : [];
+};
+
+const mapProductRow = (item: any): Product => {
+  const availableSizes = normalizeAvailableSizes(item.available_sizes, item.name ?? '', item.subcategory ?? '');
+  const sizeChart = normalizeProductSizeChart(item.size_chart, availableSizes, item.name ?? '', item.subcategory ?? '');
+  const stockCount = Number(item.stock_count) || sizeChart.reduce((sum, entry) => sum + (entry.available ? Math.max(entry.stock, 0) : 0), 0) || (availableSizes.length ? 1 : 0);
+
+  return {
+    id: String(item.id ?? ''),
+    sku: item.sku || `SKU-${String(item.id ?? 'product').slice(0, 8)}`,
+    name: item.name ?? '',
+    tagline: item.tagline ?? '',
+    category: (item.category as ProductCategory) || 'sarees',
+    subcategory: item.subcategory ?? '',
+    price: Number(item.price) || 0,
+    originalPrice: item.original_price == null ? undefined : Number(item.original_price),
+    images: item.images?.length ? item.images : item.image_url ? [item.image_url] : [],
+    fabric: item.fabric ?? '',
+    color: item.color ?? '',
+    colorVariants: item.color_variants ?? undefined,
+    occasion: item.occasion ?? '',
+    description: item.description ?? '',
+    craftDetails: item.craft_details ?? [],
+    careInstructions: item.care_instructions ?? '',
+    availableSizes,
+    sizeChart,
+    inStock: item.in_stock ?? stockCount > 0,
+    stockCount,
+    isBestSeller: item.is_best_seller ?? false,
+    isNewArrival: item.is_new_arrival ?? false,
+    isCustomizable: item.is_customizable ?? false,
+    rating: Number(item.rating) || 0,
+    reviewCount: Number(item.review_count) || 0,
+    reviews: (item.reviews ?? []).map((review: any): Review => ({
+      id: review.id,
+      author: review.author ?? '',
+      rating: Number(review.rating) || 0,
+      date: review.date ?? review.created_at ?? '',
+      comment: review.comment ?? '',
+      verified: review.verified ?? false,
+      location: review.location ?? undefined,
+    })),
+    customizationBasePrice: item.customization_base_price == null ? undefined : Number(item.customization_base_price),
+    isActive: item.is_active ?? true,
+  };
+};
 
 const mapOrderRow = (row: any): Order => ({
   id: row.id,
@@ -96,6 +128,7 @@ const mapOrderRow = (row: any): Order => ({
   whatsappUpdates: row.whatsapp_updates ?? false,
   notes: row.notes ?? undefined,
   timeline: row.timeline ?? [],
+  shipmentId: row.shipment_id ?? undefined,
 });
 
 const sendBusinessEmail = async (event: string, to: string, subject: string, text: string) => {
@@ -124,7 +157,6 @@ export default function App() {
     setProducts((data ?? []).map(mapProductRow));
     setIsProductsLoading(false);
   };
-
   useEffect(() => {
     loadProducts();
   }, []);
@@ -279,7 +311,7 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isAdminPortalOpen, setIsAdminPortalOpen] = useState(false);
   const [isUserAccountOpen, setIsUserAccountOpen] = useState(false);
-  const [activePage, setActivePage] = useState<'home' | 'about'>('home');
+  const [activePage, setActivePage] = useState<'home' | 'about' | 'tracking'>('home');
 
   // Wishlist handler
   const handleToggleWishlist = async (prod: Product) => {
@@ -315,13 +347,13 @@ export default function App() {
     return {
       ...prod,
       color: matchingVariant.name || prod.color,
-      colorHex: matchingVariant.hex || prod.colorHex,
+      colorVariants: [matchingVariant],
       images: variantImages,
     };
   };
 
   const handleAddToCartSimple = (prod: Product, selectedColor?: string) => {
-    handleAddToCartDetailed(prod, prod.availableSizes[0] || 'Free Size', false, undefined, 0, selectedColor);
+    handleAddToCartDetailed(prod, prod.availableSizes[0] || '', false, undefined, 0, selectedColor);
     setIsCartOpen(true);
   };
 
@@ -395,18 +427,18 @@ export default function App() {
   // Coupon Logic
   const handleApplyCoupon = (code: string) => {
     const subtotal = cart.reduce((acc, i) => acc + i.itemTotal, 0);
-    if (code === 'AURA10') {
+    if (code === 'BHUVI10') {
       const disc = Math.round(subtotal * 0.1);
       setDiscountAmount(disc);
       setCouponCode(code);
       return { success: true, message: `✨ Coupon BHUVI10 applied! 10% discount (-₹${disc.toLocaleString('en-IN')})` };
-    } else if (code === 'FIRSTFASHION') {
-      const disc = 1500;
+    } else if (code === 'BHUVI15') {
+      const disc = Math.round(subtotal * 0.15);
       setDiscountAmount(disc);
       setCouponCode(code);
-      return { success: true, message: `✨ Coupon FIRSTFASHION applied! (-₹1,500 off)` };
+      return { success: true, message: `✨ Coupon BHUVI15 applied! 15% discount (-₹${disc.toLocaleString('en-IN')})` };
     }
-    return { success: false, message: 'Invalid coupon code. Try AURA10 or FIRSTFASHION.' };
+    return { success: false, message: 'Invalid coupon code. Try BHUVI10 or BHUVI15.' };
   };
 
   // Order Placement
@@ -486,15 +518,14 @@ export default function App() {
     original_price: product.originalPrice ?? null,
     category: product.category,
     images: product.images,
-    image_url: product.images[0] || null,
     fabric: product.fabric,
     color: product.color,
-    color_hex: product.colorHex,
     color_variants: product.colorVariants ?? [],
     occasion: product.occasion,
     craft_details: product.craftDetails,
     care_instructions: product.careInstructions,
     available_sizes: product.availableSizes,
+    size_chart: product.sizeChart ?? buildSizeChart(product.availableSizes, product.name, product.subcategory),
     in_stock: product.inStock,
     stock_count: product.stockCount,
     is_best_seller: product.isBestSeller ?? false,
@@ -514,7 +545,6 @@ export default function App() {
       .eq('name', payload.name)
       .eq('price', payload.price)
       .eq('category', payload.category)
-      .eq('image_url', payload.image_url)
       .maybeSingle();
 
     if (lookupError) {
@@ -590,6 +620,18 @@ export default function App() {
       if (error) console.error('Failed to update order status:', error);
       else {
         loadOrders();
+        if (order.shipmentId) {
+          const shipmentStatusMap: Partial<Record<OrderStatus, ShipmentStatus>> = {
+            'Order Placed': 'ORDER_PLACED',
+            'Crafting & Stitching': 'PROCESSING',
+            'Quality Inspection': 'PACKED',
+            Dispatched: 'SHIPPED',
+            Delivered: 'DELIVERED',
+            Cancelled: 'CANCELLED',
+          };
+          const shipmentStatus = shipmentStatusMap[newStatus];
+          if (shipmentStatus) void shipmentService.addTrackingEvent(order.shipmentId, shipmentStatus, undefined, `Order status updated to ${newStatus}.`);
+        }
         void sendBusinessEmail(
           'order_status_update',
           order.customer.email,
@@ -768,6 +810,8 @@ export default function App() {
             }}
             onBackHome={() => setActivePage('home')}
           />
+        ) : activePage === 'tracking' ? (
+          <OrderTrackingPage onBackHome={() => setActivePage('home')} />
         ) : <>
         {/* Editorial Hero Banner */}
         <HeroBanner
@@ -896,6 +940,7 @@ export default function App() {
       {/* Footer */}
       <Footer
         onOpenAdmin={() => setIsAdminPortalOpen(true)}
+        onOpenTracking={() => setActivePage('tracking')}
       />
 
       {/* Floating WhatsApp Concierge Widget */}
