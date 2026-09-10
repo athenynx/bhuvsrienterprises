@@ -40,6 +40,22 @@ export interface ProductSizeEntry {
   size: string;
   available: boolean;
   stock: number;
+  id?: string;
+  sortOrder?: number;
+}
+
+export interface SizeChartRow {
+  size: string;
+  measurements: Record<string, string>;
+}
+
+export interface SizeChart {
+  id?: string;
+  name: string;
+  description: string;
+  unit: string;
+  measurementFields: string[];
+  rows: SizeChartRow[];
 }
 
 export interface Product {
@@ -61,6 +77,7 @@ export interface Product {
   careInstructions: string;
   availableSizes: string[];
   sizeChart?: ProductSizeEntry[];
+  customSizeChart?: SizeChart;
   inStock: boolean;
   stockCount: number;
   isBestSeller?: boolean;

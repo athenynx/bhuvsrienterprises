@@ -255,7 +255,7 @@ const orderData = {
   status: 'ORDER_PLACED',
   shipping_address: address,
   billing_address: billAddress,
-  payment_method: 'razorpay',
+  payment_method: 'cod',
   created_at: new Date().toISOString(),
   // shipment_id will be populated when shipment is created
 };

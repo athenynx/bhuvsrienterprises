@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Heart, ShoppingBag, MessageCircle, ShieldCheck, Truck, Check } from 'lucide-react';
-import { Product, CustomizationDetails, Review, getWesternSizeGuide, getWesternSizeOptions } from '../types';
+import { Product, CustomizationDetails, Review } from '../types';
 import { formatCurrency, generateWhatsAppLink, getProductWhatsAppText, STORE_WHATSAPP_NUMBER } from '../utils/formatters';
 
 interface ProductDetailsModalProps {
@@ -34,6 +34,7 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
   const [selectedColorVariantId, setSelectedColorVariantId] = useState<string | undefined>();
   const [selectedSize, setSelectedSize] = useState('');
+  const [sizeError, setSizeError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'reviews'>('details');
   const [addedNotice, setAddedNotice] = useState(false);
   const [pincode, setPincode] = useState('');
@@ -46,12 +47,10 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
   useEffect(() => {
     if (!product) return;
-    const defaultSize = (product.sizeChart && product.sizeChart.length > 0
-      ? product.sizeChart.find((entry) => entry.available && entry.stock > 0)?.size
-      : product.availableSizes.find((size) => size)) || product.availableSizes[0] || '';
     setSelectedImgIndex(0);
     setSelectedColorVariantId(product.colorVariants?.[0]?.id);
-    setSelectedSize(defaultSize);
+    setSelectedSize('');
+    setSizeError(null);
     setActiveTab('details');
     setDeliveryStatus(null);
   }, [product]);
@@ -65,9 +64,8 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     ? product.sizeChart
     : product.availableSizes.length > 0
       ? product.availableSizes.map((size) => ({ size, available: true, stock: product.stockCount }))
-      : getWesternSizeOptions(product.name, product.subcategory).map((size) => ({ size, available: true, stock: 5 }))
+        : []
   );
-  const sizeGuide = getWesternSizeGuide(product.name, product.subcategory, product.sizeChart?.map((entry) => entry.size) ?? product.availableSizes);
 
   const handlePincodeCheck = (event: React.FormEvent) => {
     event.preventDefault();
@@ -77,6 +75,11 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   };
 
   const handleAddToCart = () => {
+    if (sizeOptions.length > 0 && !selectedSize) {
+      setSizeError('Please select a size before adding this product to your bag.');
+      return;
+    }
+    setSizeError(null);
     onAddToCart(product, selectedSize, false, undefined, 0, selectedColorVariant?.name || product.color);
     setAddedNotice(true);
     setTimeout(() => {
@@ -194,30 +197,30 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                           );
                         })}
                       </div>
+                      {sizeError && <p className="text-[10px] font-bold text-[#8B3A32]" role="alert">{sizeError}</p>}
                     </div>
                   )}
 
-                  {sizeGuide.length > 0 && (
+                  {product.customSizeChart && (
                     <div className="border border-[#DCD7D0] bg-[#EAE5DF] p-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#2A2A2A]">Size Guide</span>
-                        <span className="text-[9px] uppercase tracking-wider text-[#6B655E]">Fit guide</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#2A2A2A]">{product.customSizeChart.name}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-[#6B655E]">{product.customSizeChart.unit}</span>
                       </div>
+                      {product.customSizeChart.description && <p className="text-[10px] text-[#6B655E] mb-2">{product.customSizeChart.description}</p>}
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-[10px] text-[#2A2A2A]">
                           <thead>
                             <tr className="border-b border-[#DCD7D0]">
                               <th className="pb-2 pr-2 font-bold uppercase tracking-wider">Size</th>
-                              <th className="pb-2 pr-2 font-bold uppercase tracking-wider">{/(pant|pants|trouser|jeans|chino|jogger)/.test(product.name.toLowerCase() + ' ' + product.subcategory.toLowerCase()) ? 'Waist' : 'Chest'}</th>
-                              <th className="pb-2 pr-2 font-bold uppercase tracking-wider">Length</th>
+                              {product.customSizeChart.measurementFields.map((field) => <th key={field} className="pb-2 pr-2 font-bold uppercase tracking-wider">{field}</th>)}
                             </tr>
                           </thead>
                           <tbody>
-                            {sizeGuide.map((entry) => (
+                            {product.customSizeChart.rows.map((entry) => (
                               <tr key={entry.size} className="border-b border-[#DCD7D0] last:border-b-0">
                                 <td className="py-2 pr-2 font-bold">{entry.size}</td>
-                                <td className="py-2 pr-2">{/(pant|pants|trouser|jeans|chino|jogger)/.test(product.name.toLowerCase() + ' ' + product.subcategory.toLowerCase()) ? entry.waist : entry.chest}</td>
-                                <td className="py-2 pr-2">{entry.length}</td>
+                                {product.customSizeChart.measurementFields.map((field) => <td key={field} className="py-2 pr-2">{entry.measurements[field] ?? '—'}</td>)}
                               </tr>
                             ))}
                           </tbody>

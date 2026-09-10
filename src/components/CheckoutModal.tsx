@@ -3,10 +3,10 @@ import confetti from 'canvas-confetti';
 import { 
   X, 
   ShieldCheck, 
-  CreditCard, 
+  CreditCard,
   Truck, 
   Check, 
-  Lock, 
+  Lock,
   MessageCircle, 
   ArrowRight
 } from 'lucide-react';
@@ -152,17 +152,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       } catch {
         throw new Error(`Payment service returned an invalid response (${response.status}).`);
       }
-      if (!response.ok) {
-        throw new Error(order.error || `Unable to start payment (${response.status}).`);
-      }
-      if (!order.order_id || !order.amount || !order.currency) {
-        throw new Error('Payment service did not return a valid Razorpay order. Please try again.');
-      }
+      if (!response.ok) throw new Error(order.error || `Unable to start payment (${response.status}).`);
+      if (!order.order_id || !order.amount || !order.currency) throw new Error('Payment service returned an invalid order.');
 
       const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
-      if (!razorpayKey) {
-        throw new Error('Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID.');
-      }
+      if (!razorpayKey) throw new Error('Payment service is not configured.');
 
       const razorpay = new window.Razorpay({
         key: razorpayKey,
@@ -180,15 +174,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payment),
             });
-            const verificationText = await verificationResponse.text();
-            let verification: { verified?: boolean; error?: string } = {};
-            try {
-              verification = verificationText ? JSON.parse(verificationText) : {};
-            } catch {
-              throw new Error(`Payment verification returned an invalid response (${verificationResponse.status}).`);
-            }
+            const verification = await verificationResponse.json();
             if (!verificationResponse.ok || !verification.verified) {
-              throw new Error(verification.error || `Payment verification failed (${verificationResponse.status}).`);
+              throw new Error(verification.error || 'Payment verification failed.');
             }
             await finalizeOrder('Paid', 'razorpay');
           } catch (error) {
@@ -203,7 +191,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           },
         },
       });
-
       razorpay.on('payment.failed', (failure) => {
         setIsProcessing(false);
         setPaymentError(failure.error?.description || 'Payment failed. Please try again.');
@@ -473,7 +460,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
                   {[
                     { id: 'razorpay', label: 'Razorpay / UPI / Card', icon: CreditCard },
-                    { id: 'cod', label: 'COD', icon: Truck },
+                    { id: 'cod', label: 'Cash on Delivery', icon: Truck },
                   ].map((m) => {
                     const Icon = m.icon;
                     return (
@@ -494,14 +481,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   })}
                 </div>
 
-                {paymentMethod !== 'cod' && (
+                {paymentMethod === 'razorpay' && (
                   <div className="p-4 bg-[#EAE5DF] border border-[#DCD7D0] text-xs text-[#2A2A2A] space-y-1">
                     <p className="font-bold uppercase tracking-wider text-[10px]">Razorpay Secure Checkout</p>
-                    <p className="text-[#6B655E]">UPI, QR scanner, cards, net banking, and wallets will open in Razorpay's secure payment window.</p>
+                    <p className="text-[#6B655E]">UPI, cards, net banking, and wallets open in Razorpay's secure payment window.</p>
                   </div>
                 )}
 
-                {/* COD */}
                 {paymentMethod === 'cod' && (
                   <div className="p-4 bg-[#EAE5DF] border border-[#DCD7D0] text-xs text-[#2A2A2A] space-y-1">
                     <p className="font-bold uppercase tracking-wider text-[10px]">Cash on Delivery (COD)</p>
@@ -530,8 +516,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   disabled={isProcessing}
                   className="px-8 py-3.5 bg-[#2A2A2A] hover:bg-[#404040] text-white text-[11px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 cursor-pointer shadow-xs"
                 >
-                  <Lock size={13} />
-                  <span>{isProcessing ? 'Opening Secure Checkout...' : `Pay ${formatCurrency(totalAmount, currency)}`}</span>
+                  {paymentMethod === 'cod' ? <Truck size={13} /> : <Lock size={13} />}
+                  <span>{isProcessing ? 'Processing...' : paymentMethod === 'cod' ? 'Place COD Order' : `Pay ${formatCurrency(totalAmount, currency)}`}</span>
                 </button>
               </div>
             </form>

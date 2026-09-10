@@ -14,7 +14,7 @@ export default function handler(req, res) {
   } = req.body || {};
 
   if (!secret) {
-    res.status(401).json({ error: 'Razorpay credentials are not configured.' });
+    res.status(401).json({ error: 'Payment service is not configured.' });
     return;
   }
 

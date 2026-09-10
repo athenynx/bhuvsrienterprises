@@ -26,13 +26,13 @@ import {
   OrderStatus,
   ShipmentStatus,
   Review,
+  ProductSizeEntry,
   buildSizeChart,
-  getWesternSizeOptions,
   normalizeProductSizeChart,
 } from './types';
 import { generateWhatsAppLink } from './utils/formatters';
 
-const normalizeAvailableSizes = (sizes: unknown, fallbackName = '', fallbackSubcategory = '') => {
+const normalizeAvailableSizes = (sizes: unknown) => {
   const rawSizes = Array.isArray(sizes)
     ? sizes
     : typeof sizes === 'string'
@@ -48,13 +48,25 @@ const normalizeAvailableSizes = (sizes: unknown, fallbackName = '', fallbackSubc
   const deduped = Array.from(new Set(mapped));
   if (deduped.length > 0) return deduped;
 
-  const defaultWesternSizes = getWesternSizeOptions(fallbackName, fallbackSubcategory);
-  return defaultWesternSizes.length > 0 ? [...defaultWesternSizes] : [];
+  return [];
 };
 
 const mapProductRow = (item: any): Product => {
-  const availableSizes = normalizeAvailableSizes(item.available_sizes, item.name ?? '', item.subcategory ?? '');
-  const sizeChart = normalizeProductSizeChart(item.size_chart, availableSizes, item.name ?? '', item.subcategory ?? '');
+  const configuredSizes = Array.isArray(item.product_sizes) && item.product_sizes.length > 0
+    ? item.product_sizes.map((row: any) => ({
+      id: row.id,
+      size: String(row.size_name ?? '').trim(),
+      available: row.is_available !== false,
+      stock: Math.max(0, Number(row.stock_count) || 0),
+      sortOrder: Number(row.sort_order) || 0,
+    })).filter((entry: ProductSizeEntry) => entry.size)
+    : undefined;
+  const availableSizes = configuredSizes?.length
+    ? configuredSizes.map((entry: ProductSizeEntry) => entry.size)
+    : normalizeAvailableSizes(item.available_sizes);
+  const sizeChart = configuredSizes?.length
+    ? configuredSizes
+    : normalizeProductSizeChart(item.size_chart, availableSizes);
   const stockCount = Number(item.stock_count) || sizeChart.reduce((sum, entry) => sum + (entry.available ? Math.max(entry.stock, 0) : 0), 0) || (availableSizes.length ? 1 : 0);
 
   return {
@@ -94,6 +106,7 @@ const mapProductRow = (item: any): Product => {
     })),
     customizationBasePrice: item.customization_base_price == null ? undefined : Number(item.customization_base_price),
     isActive: item.is_active ?? true,
+    customSizeChart: item.custom_size_chart ?? undefined,
   };
 };
 
@@ -154,7 +167,20 @@ export default function App() {
       return;
     }
 
-    setProducts((data ?? []).map(mapProductRow));
+    const productIds = (data ?? []).map((item: any) => item.id).filter(Boolean);
+    const { data: sizeRows } = productIds.length
+      ? await supabase.from('product_sizes').select('*').in('product_id', productIds).order('sort_order')
+      : { data: [] };
+    const sizesByProduct = new Map<string, any[]>();
+    (sizeRows ?? []).forEach((row: any) => {
+      const rows = sizesByProduct.get(String(row.product_id)) ?? [];
+      rows.push(row);
+      sizesByProduct.set(String(row.product_id), rows);
+    });
+    setProducts((data ?? []).map((item: any) => mapProductRow({
+      ...item,
+      product_sizes: sizesByProduct.get(String(item.id)),
+    })));
     setIsProductsLoading(false);
   };
   useEffect(() => {
@@ -353,7 +379,12 @@ export default function App() {
   };
 
   const handleAddToCartSimple = (prod: Product, selectedColor?: string) => {
-    handleAddToCartDetailed(prod, prod.availableSizes[0] || '', false, undefined, 0, selectedColor);
+    if (prod.availableSizes.length > 0) {
+      setSelectedProduct(prod);
+      setIsProductModalOpen(true);
+      return;
+    }
+    handleAddToCartDetailed(prod, '', false, undefined, 0, selectedColor);
     setIsCartOpen(true);
   };
 
@@ -365,10 +396,13 @@ export default function App() {
     customizationFee: number = 0,
     selectedColor?: string
   ) => {
+    const normalizedSize = size.trim();
+    const selectedEntry = prod.sizeChart?.find((entry) => entry.size.toLowerCase() === normalizedSize.toLowerCase());
+    if (prod.availableSizes.length > 0 && (!selectedEntry || !selectedEntry.available || selectedEntry.stock < 1)) return;
     const chosenColor = selectedColor || prod.color;
     const productSnapshot = getVariantAwareProduct(prod, chosenColor);
     const itemTotal = (productSnapshot.price + customizationFee);
-    const cartItemId = `${prod.id}-${chosenColor}-${size}-${isCustomized ? JSON.stringify(customization) : 'std'}`;
+    const cartItemId = `${prod.id}-${chosenColor}-${normalizedSize}-${isCustomized ? JSON.stringify(customization) : 'std'}`;
 
     setCart((prev) => {
       const existingIdx = prev.findIndex((item) => item.id === cartItemId);
@@ -386,7 +420,7 @@ export default function App() {
           id: cartItemId,
           productId: prod.id,
           product: productSnapshot,
-          selectedSize: size,
+          selectedSize: normalizedSize,
           selectedColor: chosenColor,
           quantity: 1,
           isCustomized,
@@ -443,9 +477,8 @@ export default function App() {
 
   // Order Placement
   const handleOrderPlaced = async (order: Order): Promise<boolean> => {
-    const { data: savedOrder, error: orderError } = await supabase
-      .from('orders')
-      .insert({
+    const { data: savedOrder, error: orderError } = await supabase.rpc('create_order_with_inventory', {
+      p_order: {
         user_id: currentUser?.id ?? null,
         order_number: order.orderNumber,
         order_date: order.date,
@@ -464,33 +497,22 @@ export default function App() {
         whatsapp_updates: order.whatsappUpdates,
         notes: order.notes ?? null,
         timeline: order.timeline,
-      })
-      .select()
-      .single();
-
-    if (orderError || !savedOrder) {
-      console.error('Failed to create order:', orderError);
-      return false;
-    }
-
-    const { error: itemsError } = await supabase.from('order_items').insert(
-      order.items.map((item) => ({
-        order_id: savedOrder.id,
+      },
+      p_items: order.items.map((item) => ({
         product_id: item.productId,
         product_snapshot: item.product,
-        selected_size: item.selectedSize,
+        selected_size: item.selectedSize || null,
         selected_color: item.selectedColor ?? null,
         quantity: item.quantity,
         is_customized: item.isCustomized,
         customization: item.customization ?? null,
         customization_fee: item.customizationFee,
         item_total: item.itemTotal,
-      }))
-    );
+      })),
+    });
 
-    if (itemsError) {
-      console.error('Failed to create order items:', itemsError);
-      await supabase.from('orders').delete().eq('id', savedOrder.id);
+    if (orderError || !savedOrder) {
+      console.error('Failed to create order:', orderError);
       return false;
     }
 
@@ -535,7 +557,26 @@ export default function App() {
     review_count: product.reviewCount,
     customization_base_price: product.customizationBasePrice ?? null,
     is_active: product.isActive ?? true,
+    custom_size_chart: product.customSizeChart ?? null,
   });
+
+  const saveProductSizes = async (product: Product) => {
+    const { error: deleteError } = await supabase.from('product_sizes').delete().eq('product_id', product.id);
+    if (deleteError && deleteError.code !== '42P01') return false;
+    if (product.availableSizes.length === 0) return true;
+    const rows = product.availableSizes.map((size, index) => {
+      const entry = product.sizeChart?.find((candidate) => candidate.size.toLowerCase() === size.toLowerCase());
+      return {
+        product_id: product.id,
+        size_name: size,
+        stock_count: Math.max(0, Number(entry?.stock) || 0),
+        is_available: entry?.available !== false,
+        sort_order: index,
+      };
+    });
+    const { error } = await supabase.from('product_sizes').insert(rows);
+    return !error;
+  };
 
   const handleAddProduct = async (newProd: Product): Promise<boolean> => {
     const payload = getSupabaseProductPayload(newProd);
@@ -553,12 +594,14 @@ export default function App() {
     }
 
     if (!existingProduct) {
-      const { error } = await supabase.from('products').insert(payload);
-      if (error) {
+      const { data: insertedProduct, error } = await supabase.from('products').insert(payload).select('id').single();
+      if (error || !insertedProduct) {
         console.error('Failed to create product:', error);
         return false;
       }
+      newProd.id = insertedProduct.id;
     }
+    if (!(await saveProductSizes(newProd))) return false;
 
     await loadProducts();
     return true;
@@ -576,6 +619,8 @@ export default function App() {
       console.error('Failed to update product:', error);
       return false;
     }
+
+    if (!(await saveProductSizes(updatedProd))) return false;
 
     await loadProducts();
     return true;

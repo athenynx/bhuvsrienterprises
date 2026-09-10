@@ -24,7 +24,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { Product, ProductColorVariant, Order, OrderStatus, ProductCategory } from '../types';
+import { Product, ProductColorVariant, Order, OrderStatus, ProductCategory, SizeChart } from '../types';
 import { formatCurrency, generateWhatsAppLink, getOrderWhatsAppText } from '../utils/formatters';
 import { ShipmentManagement } from './ShipmentManagement';
 
@@ -103,6 +103,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [careInstructions, setCareInstructions] = useState('');
   const [availableSizes, setAvailableSizes] = useState('');
   const [sizeChart, setSizeChart] = useState<Array<{ size: string; available: boolean; stock: number }>>([]);
+  const [customSizeChart, setCustomSizeChart] = useState<SizeChart | undefined>();
   const [stockCount, setStockCount] = useState(0);
   const [inStock, setInStock] = useState(true);
   const [isBestSeller, setIsBestSeller] = useState(false);
@@ -186,6 +187,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     });
     setSizeChart(nextSizeChart);
     setAvailableSizes(normalizedSizes.join(', '));
+  };
+
+  const updateCustomChart = (patch: Partial<SizeChart>) => {
+    setCustomSizeChart((current) => ({
+      id: current?.id,
+      name: current?.name ?? 'Size Chart',
+      description: current?.description ?? '',
+      unit: current?.unit ?? 'cm',
+      measurementFields: current?.measurementFields ?? ['Chest', 'Waist', 'Length'],
+      rows: current?.rows ?? [],
+      ...patch,
+    }));
+  };
+
+  const syncCustomChartSizes = (sizes: string[]) => {
+    if (!customSizeChart) return;
+    const rows = sizes.map((size) => customSizeChart.rows.find((row) => row.size === size) ?? { size, measurements: {} });
+    updateCustomChart({ rows });
   };
 
   const selectColorVariant = (variant: ProductColorVariant) => {
@@ -391,12 +410,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     const parsedPrice = Number(price);
     const parsedOriginalPrice = Number(originalPrice || 0);
     const parsedStockCount = Number(stockCount);
-    const fallbackWesternSizes = category === 'western' && /(t[- ]?shirt|tshirt|tee|shirt|pant|pants)/i.test(`${name} ${subcategory}`)
-      ? westernSizeOptions
-      : [];
     const normalizedSizes = normalizeSizeInput(availableSizes);
     const chartToSave = sizeChart.length > 0 ? sizeChart : normalizedSizes.map((size) => ({ size, available: true, stock: parsedStockCount > 0 ? Math.max(1, Math.floor(parsedStockCount / Math.max(normalizedSizes.length, 1))) : 0 }));
-    const mergedSizes = normalizedSizes.length > 0 ? normalizedSizes : fallbackWesternSizes;
+    const sizeStockTotal = normalizedSizes.length > 0
+      ? chartToSave.reduce((total, entry) => total + (entry.available ? Math.max(0, entry.stock) : 0), 0)
+      : parsedStockCount;
+    const mergedSizes = normalizedSizes;
     const variantDrafts = colorVariants.length
       ? colorVariants.map(variant => variant.id === activeColorVariantId ? { ...variant, name: color.trim(), images: imageGallery } : variant)
       : [{ id: `variant-${Date.now()}`, name: color.trim(), images: imageGallery }];
@@ -461,8 +480,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       careInstructions: careInstructions.trim(),
       availableSizes: mergedSizes,
       sizeChart: chartToSave,
-      inStock: inStock && parsedStockCount > 0,
-      stockCount: parsedStockCount,
+      customSizeChart,
+      inStock: inStock && sizeStockTotal > 0,
+      stockCount: sizeStockTotal,
       isBestSeller,
       isNewArrival,
       isCustomizable: false,
@@ -508,6 +528,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCareInstructions(prod.careInstructions || '');
     setAvailableSizes(prod.availableSizes.join(', '));
     setSizeChart(prod.sizeChart && prod.sizeChart.length > 0 ? prod.sizeChart : prod.availableSizes.map((size) => ({ size, available: true, stock: prod.stockCount }))); 
+    setCustomSizeChart(prod.customSizeChart);
     setStockCount(prod.stockCount);
     setInStock(prod.inStock);
     setIsBestSeller(Boolean(prod.isBestSeller));
@@ -535,6 +556,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCareInstructions('');
     setAvailableSizes('');
     setSizeChart([]);
+    setCustomSizeChart(undefined);
     setStockCount(0);
     setInStock(true);
     setIsBestSeller(false);
@@ -1295,6 +1317,32 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </div>
                     </div>
                   )}
+
+                  <div className="border-t border-[#DCD7D0] pt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A]">Custom Size Chart</label>
+                      <button type="button" onClick={() => updateCustomChart({ rows: normalizeSizeInput(availableSizes).map((size) => ({ size, measurements: {} })) })} className="text-[9px] uppercase tracking-wider font-bold text-[#A68A64]">{customSizeChart ? 'Update Chart' : 'Add Chart'}</button>
+                    </div>
+                    {customSizeChart && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          <input value={customSizeChart.name} onChange={(e) => updateCustomChart({ name: e.target.value })} placeholder="Chart name" className="bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs" />
+                          <input value={customSizeChart.unit} onChange={(e) => updateCustomChart({ unit: e.target.value })} placeholder="Unit (cm)" className="bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs" />
+                          <input value={customSizeChart.measurementFields.join(', ')} onChange={(e) => updateCustomChart({ measurementFields: e.target.value.split(',').map((field) => field.trim()).filter(Boolean) })} placeholder="Chest, Waist, Length" className="bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs" />
+                        </div>
+                        <input value={customSizeChart.description} onChange={(e) => updateCustomChart({ description: e.target.value })} placeholder="Instructions for shoppers" className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs" />
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[10px]">
+                            <thead><tr><th className="text-left p-1">Size</th>{customSizeChart.measurementFields.map((field) => <th key={field} className="text-left p-1">{field}</th>)}</tr></thead>
+                            <tbody>{customSizeChart.rows.map((row) => <tr key={row.size}>
+                              <td className="p-1 font-bold">{row.size}</td>
+                              {customSizeChart.measurementFields.map((field) => <td key={field} className="p-1"><input value={row.measurements[field] ?? ''} onChange={(e) => updateCustomChart({ rows: customSizeChart.rows.map((candidate) => candidate.size === row.size ? { ...candidate, measurements: { ...candidate.measurements, [field]: e.target.value } } : candidate) })} className="w-20 bg-white border border-[#DCD7D0] p-1" /></td>)}
+                            </tr>)}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* MULTI-IMAGE UPLOAD SUITE */}

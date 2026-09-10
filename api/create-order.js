@@ -8,7 +8,7 @@ export default async function handler(req, res) {
 
   const razorpay = getRazorpayClient();
   if (!razorpay) {
-    res.status(401).json({ error: 'Razorpay credentials are not configured.' });
+    res.status(401).json({ error: 'Payment service is not configured.' });
     return;
   }
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     res.status(200).json({ order_id: order.id, amount: order.amount, currency: order.currency });
   } catch (error) {
     const status = Number(error?.statusCode) === 401 ? 401 : 500;
-    console.error('Razorpay order creation failed:', error);
-    res.status(status).json({ error: 'Unable to create Razorpay order.' });
+    console.error('Payment order creation failed:', error);
+    res.status(status).json({ error: 'Unable to create payment order.' });
   }
 }
