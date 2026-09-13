@@ -24,6 +24,7 @@ serve(async (request) => {
     const emailApiUrl = Deno.env.get('EMAIL_API_URL');
     const emailApiKey = Deno.env.get('EMAIL_API_KEY');
     const emailFrom = Deno.env.get('EMAIL_FROM');
+    const businessEmail = Deno.env.get('BUSINESS_EMAIL');
 
     if (!emailApiUrl || !emailApiKey || !emailFrom) {
       return new Response(JSON.stringify({ error: 'Email provider is not configured' }), {
@@ -40,7 +41,7 @@ serve(async (request) => {
       },
       body: JSON.stringify({
         from: emailFrom,
-        to: [to],
+        to: [event === 'order_confirmation' && businessEmail ? businessEmail : to],
         subject,
         text,
         metadata: { event },

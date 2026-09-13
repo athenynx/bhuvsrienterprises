@@ -907,6 +907,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                   >
                                     <Edit3 size={13} />
                                   </button>
+                                  <button
+                                    onClick={() => onAddProduct({ ...prod, id: `prod-${Date.now()}`, sku: `${prod.sku}-COPY-${Date.now().toString(36).toUpperCase()}`, name: `${prod.name} Copy`, isActive: true })}
+                                    className="p-1.5 text-[#2A2A2A] hover:bg-[#DCD7D0] cursor-pointer"
+                                    title="Duplicate Product"
+                                  >
+                                    <Package size={13} />
+                                  </button>
                                   {prod.isActive === false ? (
                                     <button
                                       onClick={() => onUpdateProduct({ ...prod, isActive: true })}
