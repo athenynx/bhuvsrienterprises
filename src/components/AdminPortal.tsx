@@ -977,14 +977,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               <td className="p-3">
                                 <div className="space-y-1">
                                   {ord.items.map((it, i) => (
-                                    <div key={i} className="text-[11px]">
-                                      <span>{it.product.name} (x{it.quantity})</span>
+                                    <div key={i} className="text-[11px] border-b border-[#DCD7D0] last:border-b-0 pb-1 last:pb-0">
+                                      <span className="font-medium block">{it.product.name}</span>
+                                      <span className="text-[10px] text-[#6B655E]">
+                                        {it.selectedSize ? `Size: ${it.selectedSize} • ` : ''}Qty: {it.quantity} • {formatCurrency(it.itemTotal, 'INR')}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
                               </td>
                               <td className="p-3">
-                                <strong className="text-[#2A2A2A] block font-mono">₹{ord.totalAmount.toLocaleString('en-IN')}</strong>
+                                <span className="text-[9px] uppercase tracking-wider text-[#6B655E] block">Order total</span>
+                                <strong className="text-[#2A2A2A] block font-mono">{formatCurrency(ord.totalAmount, 'INR')}</strong>
                                 <span className="text-[10px] text-[#6B655E] uppercase">{ord.paymentStatus} ({ord.paymentMethod.toUpperCase()})</span>
                               </td>
                               <td className="p-3">
