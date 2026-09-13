@@ -25,7 +25,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Product, ProductColorVariant, Order, OrderStatus, ProductCategory, SizeChart } from '../types';
-import { formatCurrency, generateWhatsAppLink, getOrderWhatsAppText } from '../utils/formatters';
+import { formatCurrency, generateWhatsAppLink, getOrderDetailsWhatsAppText } from '../utils/formatters';
 import { ShipmentManagement } from './ShipmentManagement';
 
 interface AdminPortalProps {
@@ -66,6 +66,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'tracking' | 'settings'>('overview');
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
 
   // Product Manager State
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -102,6 +103,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [craftDetails, setCraftDetails] = useState<string[]>([]);
   const [careInstructions, setCareInstructions] = useState('');
   const [availableSizes, setAvailableSizes] = useState('');
+  const [hasSizes, setHasSizes] = useState(false);
+  const [hasColors, setHasColors] = useState(false);
+  const [sizeChartEnabled, setSizeChartEnabled] = useState(false);
   const [sizeChart, setSizeChart] = useState<Array<{ size: string; available: boolean; stock: number }>>([]);
   const [customSizeChart, setCustomSizeChart] = useState<SizeChart | undefined>();
   const [stockCount, setStockCount] = useState(0);
@@ -114,7 +118,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     .map((size) => size.trim().toUpperCase())
     .filter(Boolean);
 
-  const westernSizeOptions = ['S', 'M', 'L', 'XL', 'XXL'];
+  const westernSizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
   const syncSizeChartFromText = (text: string) => {
     const normalizedSizes = normalizeSizeInput(text);
@@ -419,7 +423,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     const variantDrafts = colorVariants.length
       ? colorVariants.map(variant => variant.id === activeColorVariantId ? { ...variant, name: color.trim(), images: imageGallery } : variant)
       : [{ id: `variant-${Date.now()}`, name: color.trim(), images: imageGallery }];
-    const savedVariants = variantDrafts.filter((variant) => variant.name.trim());
+    const savedVariants = hasColors ? variantDrafts.filter((variant) => variant.name.trim()) : [];
     const allVariantImages = Array.from(new Set(savedVariants.flatMap(variant => variant.images)));
 
     if (!trimmedName) {
@@ -479,7 +483,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       craftDetails: craftDetails.length ? craftDetails : [],
       careInstructions: careInstructions.trim(),
       availableSizes: mergedSizes,
-      sizeChart: chartToSave,
+      sizeChart: hasSizes ? chartToSave : [],
+      hasSizes,
+      hasColors,
+      sizeChartEnabled: hasSizes && sizeChartEnabled && Boolean(customSizeChart),
       customSizeChart,
       inStock: inStock && sizeStockTotal > 0,
       stockCount: sizeStockTotal,
@@ -527,6 +534,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCraftDetails(prod.craftDetails ?? []);
     setCareInstructions(prod.careInstructions || '');
     setAvailableSizes(prod.availableSizes.join(', '));
+    setHasSizes(prod.hasSizes ?? prod.availableSizes.length > 0);
+    setHasColors(prod.hasColors ?? Boolean(prod.colorVariants?.length));
+    setSizeChartEnabled(prod.sizeChartEnabled ?? Boolean(prod.customSizeChart));
     setSizeChart(prod.sizeChart && prod.sizeChart.length > 0 ? prod.sizeChart : prod.availableSizes.map((size) => ({ size, available: true, stock: prod.stockCount }))); 
     setCustomSizeChart(prod.customSizeChart);
     setStockCount(prod.stockCount);
@@ -555,6 +565,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCraftDetails([]);
     setCareInstructions('');
     setAvailableSizes('');
+    setHasSizes(false);
+    setHasColors(false);
+    setSizeChartEnabled(false);
     setSizeChart([]);
     setCustomSizeChart(undefined);
     setStockCount(0);
@@ -1007,6 +1020,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               <td className="p-3 text-right">
                                 <div className="flex justify-end gap-2 flex-wrap">
                                   <button
+                                    onClick={() => setDetailOrderId(detailOrderId === ord.id ? null : ord.id)}
+                                    className="p-1.5 border border-[#2A2A2A] text-[#2A2A2A] cursor-pointer inline-flex items-center gap-1 text-[10px] uppercase font-bold"
+                                  >
+                                    <Eye size={13} />
+                                    <span>{detailOrderId === ord.id ? 'Hide Details' : 'View Details'}</span>
+                                  </button>
+                                  <button
                                     onClick={() => setTrackingOrderId(trackingOrderId === ord.id ? null : ord.id)}
                                     className="p-1.5 bg-[#A68A64] text-white cursor-pointer inline-flex items-center gap-1 text-[10px] uppercase font-bold"
                                   >
@@ -1015,7 +1035,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                   </button>
                                   <button
                                     onClick={() => {
-                                      const msg = getOrderWhatsAppText(ord.orderNumber, ord.customer.name, ord.orderStatus);
+                                      const msg = getOrderDetailsWhatsAppText(ord);
                                       const link = generateWhatsAppLink(ord.customer.phone, msg);
                                       window.open(link, '_blank');
                                     }}
@@ -1028,6 +1048,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 </div>
                               </td>
                               </tr>
+                              {detailOrderId === ord.id && (
+                                <tr>
+                                  <td colSpan={6} className="p-4 bg-[#F5F2ED]">
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+                                      <div className="space-y-1"><h3 className="font-bold uppercase tracking-wider text-[10px]">Customer</h3><p>{ord.customer.name}</p><p>{ord.customer.phone}</p><p>{ord.customer.email}</p></div>
+                                      <div className="space-y-1"><h3 className="font-bold uppercase tracking-wider text-[10px]">Delivery</h3><p>{[ord.customer.address, ord.customer.city, ord.customer.state, ord.customer.pincode, ord.customer.country].filter(Boolean).join(', ')}</p><p className="text-[#6B655E]">Notes: {ord.notes || 'None'}</p></div>
+                                      <div className="space-y-1"><h3 className="font-bold uppercase tracking-wider text-[10px]">Totals</h3><p>Subtotal: {formatCurrency(ord.subtotal, 'INR')}</p><p>Shipping: {formatCurrency(ord.shippingFee, 'INR')}</p><p>Discount: {formatCurrency(ord.discount, 'INR')}</p><strong>Grand total: {formatCurrency(ord.totalAmount, 'INR')}</strong></div>
+                                    </div>
+                                    <div className="mt-4 space-y-2 border-t border-[#DCD7D0] pt-3">{ord.items.map((item) => <div key={item.id} className="flex items-center gap-3"><img src={item.product.images?.[0]} alt="" className="w-10 h-10 object-cover border border-[#DCD7D0]" /><span className="flex-1">{item.product.name} {item.selectedColor ? `• ${item.selectedColor}` : ''} {item.selectedSize ? `• ${item.selectedSize}` : ''} • Qty {item.quantity}</span><strong>{formatCurrency(item.itemTotal, 'INR')}</strong></div>)}</div>
+                                  </td>
+                                </tr>
+                              )}
                               {trackingOrderId === ord.id && (
                                 <tr>
                                   <td colSpan={6} className="p-4 bg-[#F5F2ED]">
@@ -1248,9 +1280,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <div className="bg-[#EAE5DF] p-4 border border-[#DCD7D0] space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <label className="text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A]">Size Chart & Fit Guide</label>
-                    <span className="text-[9px] uppercase tracking-wider text-[#6B655E]">Visible to shoppers</span>
+                    <label className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-[#6B655E]">
+                      <input type="checkbox" checked={hasSizes} onChange={(event) => { setHasSizes(event.target.checked); if (!event.target.checked) setSizeChartEnabled(false); }} />
+                      Enable sizes
+                    </label>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  {hasSizes && <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider font-bold text-[#6B655E] mb-1">Available Sizes</label>
                       <input
@@ -1275,9 +1310,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs"
                       />
                     </div>
-                  </div>
+                  </div>}
 
-                  <div className="grid grid-cols-5 gap-2">
+                  {hasSizes && <div className="grid grid-cols-7 gap-2">
                     {(sizeChart.length > 0 ? sizeChart : westernSizeOptions.map((size) => ({ size, available: true, stock: 5 }))).map((entry) => {
                       const isSelected = normalizeSizeInput(availableSizes).includes(entry.size);
                       return (
@@ -1292,9 +1327,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </button>
                       );
                     })}
-                  </div>
+                  </div>}
 
-                  {sizeChart.length > 0 && (
+                  {hasSizes && sizeChart.length > 0 && (
                     <div className="rounded border border-[#DCD7D0] bg-[#F5F2ED] p-2">
                       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A] mb-2">
                         <span>Size</span>
@@ -1322,7 +1357,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     </div>
                   )}
 
-                  <div className="border-t border-[#DCD7D0] pt-3 space-y-2">
+                  {hasSizes && <div className="border-t border-[#DCD7D0] pt-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A]">Custom Size Chart</label>
                       <button type="button" onClick={() => updateCustomChart({ rows: normalizeSizeInput(availableSizes).map((size) => ({ size, measurements: {} })) })} className="text-[9px] uppercase tracking-wider font-bold text-[#A68A64]">{customSizeChart ? 'Update Chart' : 'Add Chart'}</button>
@@ -1346,7 +1381,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </div>
                       </div>
                     )}
-                  </div>
+                    <label className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-[#6B655E]"><input type="checkbox" checked={sizeChartEnabled} onChange={(event) => setSizeChartEnabled(event.target.checked)} disabled={!customSizeChart} /> Show size chart to shoppers</label>
+                  </div>}
                 </div>
 
                 {/* MULTI-IMAGE UPLOAD SUITE */}
@@ -1541,6 +1577,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         }
                       }}
                       placeholder="Name the selected colour variant"
+                      disabled={!hasColors}
                       className="w-full bg-[#F5F2ED] border border-[#DCD7D0] p-2 text-xs"
                     />
                   </div>
@@ -1562,16 +1599,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <div>
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-[#2A2A2A]">Colour Variants</h3>
                     </div>
-                    <button
+                    <label className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-[#6B655E]"><input type="checkbox" checked={hasColors} onChange={(event) => { setHasColors(event.target.checked); if (!event.target.checked) setColorVariants([]); else if (colorVariants.length === 0) setColorVariants([{ ...initialColorVariant, images: imageGallery }]); }} /> Enable colours</label>
+                    {hasColors && <button
                       type="button"
                       onClick={addColorVariant}
                       className="px-3 py-2 bg-[#2A2A2A] text-white text-[9px] uppercase tracking-wider font-bold flex items-center gap-1 cursor-pointer"
                     >
                       <Plus size={12} /> Add Colour
-                    </button>
+                    </button>}
                   </div>
 
-                  {colorVariants.length > 0 && (
+                  {hasColors && colorVariants.length > 0 && (
                     <div className="space-y-2">
                       {colorVariants.map((variant) => (
                         <div key={variant.id} className={`flex items-center gap-2 p-2 border ${activeColorVariantId === variant.id ? 'border-[#2A2A2A] bg-[#F5F2ED]' : 'border-[#DCD7D0] bg-[#F5F2ED]'}`}>

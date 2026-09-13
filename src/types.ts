@@ -75,6 +75,9 @@ export interface Product {
   description: string;
   craftDetails: string[];
   careInstructions: string;
+  hasSizes?: boolean;
+  hasColors?: boolean;
+  sizeChartEnabled?: boolean;
   availableSizes: string[];
   sizeChart?: ProductSizeEntry[];
   customSizeChart?: SizeChart;

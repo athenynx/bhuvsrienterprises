@@ -58,7 +58,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     const itemsList = items
       .map(
         (i, idx) =>
-          `${idx + 1}. *${i.product.name}* (${i.selectedColor ? `Colour: ${i.selectedColor}, ` : ''}${i.selectedSize ? `Size: ${i.selectedSize}, ` : ''}Qty: ${i.quantity}) - ₹${i.itemTotal.toLocaleString('en-IN')}`
+          `${idx + 1}. *${i.product.name}*\n${i.selectedColor ? `Colour: ${i.selectedColor}\n` : ''}${i.selectedSize ? `Size: ${i.selectedSize}\n` : ''}Quantity: ${i.quantity}\nItem total: ₹${i.itemTotal.toLocaleString('en-IN')}`
       )
       .join('\n');
 

@@ -30,7 +30,7 @@ import {
   buildSizeChart,
   normalizeProductSizeChart,
 } from './types';
-import { generateWhatsAppLink } from './utils/formatters';
+import { generateWhatsAppLink, getOrderDetailsWhatsAppText, getOrderEmailText } from './utils/formatters';
 
 const normalizeAvailableSizes = (sizes: unknown) => {
   const rawSizes = Array.isArray(sizes)
@@ -87,6 +87,9 @@ const mapProductRow = (item: any): Product => {
     craftDetails: item.craft_details ?? [],
     careInstructions: item.care_instructions ?? '',
     availableSizes,
+    hasSizes: item.has_sizes ?? availableSizes.length > 0,
+    hasColors: item.has_colors ?? (Array.isArray(item.color_variants) && item.color_variants.length > 0),
+    sizeChartEnabled: item.size_chart_enabled ?? Boolean(item.custom_size_chart),
     sizeChart,
     inStock: item.in_stock ?? stockCount > 0,
     stockCount,
@@ -521,7 +524,7 @@ export default function App() {
       'order_confirmation',
       order.customer.email,
       `Order confirmation ${order.orderNumber}`,
-      `Your BhuviSri Enterprises order ${order.orderNumber} has been received.`,
+      getOrderEmailText(order),
     );
     setCart([]);
     setDiscountAmount(0);
@@ -558,6 +561,9 @@ export default function App() {
     customization_base_price: product.customizationBasePrice ?? null,
     is_active: product.isActive ?? true,
     custom_size_chart: product.customSizeChart ?? null,
+    has_sizes: product.hasSizes ?? product.availableSizes.length > 0,
+    has_colors: product.hasColors ?? Boolean(product.colorVariants?.length),
+    size_chart_enabled: product.sizeChartEnabled ?? Boolean(product.customSizeChart),
   });
 
   const saveProductSizes = async (product: Product) => {

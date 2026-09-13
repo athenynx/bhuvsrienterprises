@@ -60,12 +60,12 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   const selectedColorVariant = product.colorVariants?.find((variant) => variant.id === selectedColorVariantId);
   const displayImages = selectedColorVariant?.images.length ? selectedColorVariant.images : product.images;
 
-  const sizeOptions = (product.sizeChart && product.sizeChart.length > 0
+  const sizeOptions = product.hasSizes === false ? [] : (product.sizeChart && product.sizeChart.length > 0
     ? product.sizeChart
     : product.availableSizes.length > 0
       ? product.availableSizes.map((size) => ({ size, available: true, stock: product.stockCount }))
-        : []
-  );
+        : []);
+  const colorOptions = product.hasColors === false ? [] : (product.colorVariants ?? []).filter((variant) => variant.name.trim());
 
   const handlePincodeCheck = (event: React.FormEvent) => {
     event.preventDefault();
@@ -201,7 +201,7 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                     </div>
                   )}
 
-                  {product.customSizeChart && (
+                  {product.sizeChartEnabled !== false && product.customSizeChart && (
                     <div className="border border-[#DCD7D0] bg-[#EAE5DF] p-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#2A2A2A]">{product.customSizeChart.name}</span>
@@ -228,7 +228,7 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                       </div>
                     </div>
                   )}
-                  {product.colorVariants && product.colorVariants.length > 1 && <div><span className="text-[10px] uppercase tracking-wider text-[#6B655E] block mb-2">Available Colours ({product.colorVariants.length})</span><div className="flex flex-wrap gap-3">{product.colorVariants.map((variant) => <button key={variant.id} type="button" onClick={() => { setSelectedColorVariantId(variant.id); setSelectedImgIndex(0); }} className="flex flex-col items-center gap-1 cursor-pointer"><span className={`w-14 h-16 border overflow-hidden block transition-all ${selectedColorVariantId === variant.id ? 'border-[#2A2A2A] ring-2 ring-offset-1 ring-[#2A2A2A]' : 'border-[#DCD7D0]'}`}>{variant.images[0] ? <img src={variant.images[0]} alt={variant.name} className="w-full h-full object-cover" /> : <span className="block w-full h-full bg-[#DCD7D0]" />}</span><span className={`text-[9px] max-w-14 truncate ${selectedColorVariantId === variant.id ? 'text-[#2A2A2A] font-bold' : 'text-[#6B655E]'}`}>{variant.name}</span></button>)}</div></div>}
+                  {colorOptions.length > 0 && <div><span className="text-[10px] uppercase tracking-wider text-[#6B655E] block mb-2">Available Colours ({colorOptions.length})</span><div className="flex flex-wrap gap-3">{colorOptions.map((variant) => <button key={variant.id} type="button" onClick={() => { setSelectedColorVariantId(variant.id); setSelectedImgIndex(0); }} className="flex flex-col items-center gap-1 cursor-pointer"><span className={`w-14 h-16 border overflow-hidden block transition-all ${selectedColorVariantId === variant.id ? 'border-[#2A2A2A] ring-2 ring-offset-1 ring-[#2A2A2A]' : 'border-[#DCD7D0]'}`}>{variant.images[0] ? <img src={variant.images[0]} alt={variant.name} className="w-full h-full object-cover" /> : <span className="block w-full h-full bg-[#DCD7D0]" />}</span><span className={`text-[9px] max-w-14 truncate ${selectedColorVariantId === variant.id ? 'text-[#2A2A2A] font-bold' : 'text-[#6B655E]'}`}>{variant.name}</span></button>)}</div></div>}
                   <div className="grid grid-cols-2 gap-2 pt-2">{[['Fabric', product.fabric], ['Color', selectedColorVariant?.name || product.color], ['Occasion', product.occasion]].map(([label, value]) => <div key={label} className="p-3 bg-[#EAE5DF] border border-[#DCD7D0]"><span className="text-[10px] uppercase tracking-wider text-[#6B655E] block">{label}</span><strong className="text-[#2A2A2A] font-medium">{value}</strong></div>)}</div>
                   <p className="text-xs text-[#6B655E] leading-relaxed font-light">{product.description}</p>
                 </div>
