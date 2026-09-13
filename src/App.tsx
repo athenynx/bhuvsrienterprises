@@ -568,7 +568,10 @@ export default function App() {
 
   const saveProductSizes = async (product: Product) => {
     const { error: deleteError } = await supabase.from('product_sizes').delete().eq('product_id', product.id);
-    if (deleteError && deleteError.code !== '42P01') return false;
+    if (deleteError && deleteError.code !== '42P01') {
+      console.error('Failed to clear product sizes:', deleteError);
+      return false;
+    }
     if (product.availableSizes.length === 0) return true;
     const rows = product.availableSizes.map((size, index) => {
       const entry = product.sizeChart?.find((candidate) => candidate.size.toLowerCase() === size.toLowerCase());
@@ -581,6 +584,7 @@ export default function App() {
       };
     });
     const { error } = await supabase.from('product_sizes').insert(rows);
+    if (error) console.error('Failed to save product sizes:', error);
     return !error;
   };
 
@@ -599,6 +603,11 @@ export default function App() {
       return false;
     }
 
+    if (existingProduct) {
+      console.warn('A product with the same name, price, and category already exists:', existingProduct.id);
+      return false;
+    }
+
     if (!existingProduct) {
       const { data: insertedProduct, error } = await supabase.from('products').insert(payload).select('id').single();
       if (error || !insertedProduct) {
@@ -607,7 +616,7 @@ export default function App() {
       }
       newProd.id = insertedProduct.id;
     }
-    if (!(await saveProductSizes(newProd))) return false;
+    if (!(await saveProductSizes({ ...newProd, id: newProd.id }))) return false;
 
     await loadProducts();
     return true;

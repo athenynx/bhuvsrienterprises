@@ -424,7 +424,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       ? colorVariants.map(variant => variant.id === activeColorVariantId ? { ...variant, name: color.trim(), images: imageGallery } : variant)
       : [{ id: `variant-${Date.now()}`, name: color.trim(), images: imageGallery }];
     const savedVariants = hasColors ? variantDrafts.filter((variant) => variant.name.trim()) : [];
-    const allVariantImages = Array.from(new Set(savedVariants.flatMap(variant => variant.images)));
+    const allVariantImages = Array.from(new Set(
+      savedVariants.flatMap(variant => variant.images).concat(hasColors ? [] : imageGallery),
+    ));
 
     if (!trimmedName) {
       setUploadStatusMsg('Please enter a product name.');
@@ -505,7 +507,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       : await onAddProduct(productPayload);
 
     if (!saved) {
-      setUploadStatusMsg('Product could not be saved. Check your admin permissions and try again.');
+      setUploadStatusMsg('Product could not be saved. Check for a duplicate product, admin permissions, and database migration status.');
       return;
     }
 
